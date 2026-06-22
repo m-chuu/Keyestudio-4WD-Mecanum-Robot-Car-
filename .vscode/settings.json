@@ -1,0 +1,6 @@
+{
+    "clangd.arguments": [
+        "--compile-commands-dir=/Users/user/Documents/PlatformIO/Projects/Mobile-Robot/.cache/clangd",
+        "--query-driver=/Users/user/.platformio/packages/toolchain-*/bin/*,/Users/user/.platformio/packages/tool-*/bin/*"
+    ]
+}
