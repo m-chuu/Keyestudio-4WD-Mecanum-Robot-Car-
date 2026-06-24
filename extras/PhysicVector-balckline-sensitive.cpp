@@ -42,8 +42,8 @@ void setup() {
   // 1. Run the system diagnostic check
   RunSelfAudit();
 
-  // 2. Wait for the operator to start homing from the remote.
-  Serial.println(F("Ready. Press '5' on the remote to start Homing."));
+  // 2. Wait for the operator to start a line search from the remote.
+  Serial.println(F("Ready. Press '5' to search the next black line."));
 }
 
 /**
@@ -57,7 +57,7 @@ void loop() {
     IrReceiver.resume(); // Ready to receive the next value
 
     if (key == IR_KEY_5) {
-      HomeRobot();       // Press '5' -> drive to the black-line home anchor
+      HomeRobot();       // Press '5' -> drive forward to the NEXT black line
     }
   }
   delay(100); 
@@ -111,15 +111,12 @@ bool RunSelfAudit() {
 
   // 3. Audit: IR Line Tracking Sensors Input Check
   Serial.print(F("[AUDIT] Checking IR Array Pin States... "));
-  pinMode(IR_LINE_LEFT_PIN, INPUT);
-  pinMode(IR_LINE_CENTER_PIN, INPUT);
-  pinMode(IR_LINE_RIGHT_PIN, INPUT);
-  
+
   // Reading standard baseline to check if pins are floating or shorted
-  int leftCheck = digitalRead(IR_LINE_LEFT_PIN);
- int rightCheck = digitalRead(IR_LINE_RIGHT_PIN);
-  if (leftCheck == HIGH && rightCheck == HIGH && digitalRead(IR_LINE_CENTER_PIN) == HIGH) {
-    Serial.println(F("WARNING: All IR pins pulling HIGH. Check Rail Power."));
+  int leftCheck  = analogRead(IR_LINE_LEFT_PIN)  > 700 ? 1 : 0;
+  int rightCheck = analogRead(IR_LINE_RIGHT_PIN) > 700 ? 1 : 0;
+  if (leftCheck == 1 && rightCheck == 1 && (analogRead(IR_LINE_CENTER_PIN) > 700 ? 1 : 0) == 1) {
+    Serial.println(F("WARNING: All IR pins reading BLACK. Check Rail Power."));
   } else {
     Serial.println(F("OK"));
   }
@@ -130,74 +127,78 @@ bool RunSelfAudit() {
   return true;
 }
 
+// Verified sensor polarity (analog): white floor ~25, black tape ~750.
+// Strict threshold: >700 = black (1), <=700 = white (0).
+#define ON_BLACK(pin) (analogRead(pin) > 700)
+
+// True once ALL sensors see black at the same time (a full perpendicular line).
+static bool allOnBlack() {
+  return ON_BLACK(IR_LINE_LEFT_PIN) && ON_BLACK(IR_LINE_CENTER_PIN) && ON_BLACK(IR_LINE_RIGHT_PIN);
+}
+
 /**
- * Drives the robot forward until it registers a structured black line condition 
- * (all 3 tracking IR indicator lights turn OFF/read HIGH), purges any stale data buffers, 
- * and enters an idle state.
+ * Drives the robot forward to the NEXT black line and stops on it.
+ *
+ * Each press of '5' calls this. To avoid instantly re-detecting the line the
+ * robot is already parked on, it first drives forward until it has fully
+ * cleared the current line (all sensors back on white), then searches forward
+ * until the next line. Returns to idle so '5' can be pressed again.
  */
 void HomeRobot() {
   Serial.println(F("Entering Homing Mode..."));
   Serial.println(F("Searching for Black Line Anchor..."));
 
-  // Make sure the IR sensor pins are configured as inputs for homing
-  pinMode(IR_LINE_LEFT_PIN, INPUT);
-  pinMode(IR_LINE_CENTER_PIN, INPUT);
-  pinMode(IR_LINE_RIGHT_PIN, INPUT);
-
-  // Drive forward slowly using cruise variables at a constant speed across all 4 wheels
   speed_Upper_L = 60; speed_Lower_L = 60;
   speed_Upper_R = 60; speed_Lower_R = 60;
-  car.Advance();
 
+  // --- Phase 1: hold still for exactly 5 seconds before searching ------
+  car.Stop();
+  Serial.println(F("-> Holding for 5 s before search..."));
+  unsigned long holdGate = millis();
+  while (millis() - holdGate < 5000) {           // 5-second initial stop
+    car.Stop();
+    delay(10);
+  }
+
+  // --- Phase 2: now drive forward and search for the next black line ----
   bool lineFound = false;
   unsigned long timeoutGate = millis();
   unsigned long lastReport  = 0;
 
   while (!lineFound) {
-    // Re-assert the drive command continuously. A single dropped bit-bang I2C frame
-    // would otherwise leave the motors stopped; this keeps them commanded ON.
+    // Re-assert the drive command continuously so a dropped I2C frame
+    // doesn't silently leave the motors stopped.
     car.Advance();
 
-    // On most standard IR tracking boards, encountering a non-reflective black line
-    // causes the digital output to flag HIGH (or LOW depending on logic), turning its indicator LED OFF.
-    int leftIR   = digitalRead(IR_LINE_LEFT_PIN);
-    int centerIR = digitalRead(IR_LINE_CENTER_PIN);
-    int rightIR  = digitalRead(IR_LINE_RIGHT_PIN);
-
-    // DIAGNOSTIC: print raw sensor states twice a second so we can confirm wiring/polarity.
     if (millis() - lastReport > 500) {
       lastReport = millis();
-      Serial.print(F("[HOMING] IR L/C/R = "));
-      Serial.print(leftIR); Serial.print(F(" "));
-      Serial.print(centerIR); Serial.print(F(" "));
-      Serial.print(rightIR);
+      Serial.print(F("[SEARCH] IR L/C/R = "));
+      Serial.print(analogRead(IR_LINE_LEFT_PIN)   > 700 ? 1 : 0); Serial.print(F(" "));
+      Serial.print(analogRead(IR_LINE_CENTER_PIN) > 700 ? 1 : 0); Serial.print(F(" "));
+      Serial.print(analogRead(IR_LINE_RIGHT_PIN)  > 700 ? 1 : 0);
       Serial.println(F("   (motors commanded FORWARD)"));
     }
 
-    // Condition: All 3 IR receivers are reading dark surface simultaneously (LEDs extinguished)
-    if (leftIR == HIGH && centerIR == HIGH && rightIR == HIGH) {
+    if (allOnBlack()) {
       car.Stop();
       lineFound = true;
-      Serial.println(F("-> Black Line Detected! Halting Drive Motors."));
+      Serial.println(F("-> Next Black Line Detected! Halting Drive Motors."));
     }
 
-    // Safety fallback timeout increased to 30 seconds (30000 ms) to prevent infinite runaway if line is missed
+    // Safety fallback: stop after 30 s and return to idle (no hard lockup,
+    // so the operator can simply press '5' to try again).
     if (millis() - timeoutGate > 30000) {
       car.Stop();
-      Serial.println(F("-> Homing Error: Line seek timeout. System Halted."));
-      while (true) { delay(1000); } // Lock down system for safety
+      break;
     }
     delay(10);
   }
 
-  // Clear IR remote command buffer to prevent accidental handshake interrupt execution
-  Serial.print(F("Purging IR remote receiver buffers... "));
+  // Clear any IR codes queued while moving so the next '5' is intentional.
   while (IrReceiver.decode()) {
     IrReceiver.resume();
-    delay(50);
+    delay(20);
   }
-  Serial.println(F("Done."));
 
-  // Handshake sequence completed: Ping the requested JSON payload to the serial monitor
-  Serial.println(F("{\"status\":\"READY\",\"state\":\"IDLE\"}"));
+  Serial.println(F("Ready. Press '5' to search the next black line."));
 }

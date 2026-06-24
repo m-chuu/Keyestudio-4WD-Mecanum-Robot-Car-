@@ -11,13 +11,14 @@
 // Motor controller bit-bang I2C lives on digital pins D3 (SDA) and D2 (SCL).
 const uint8_t MOTOR_SDA_PIN = 3;
 const uint8_t MOTOR_SCL_PIN = 2;
-const uint8_t SERVO_PIN     = A0;   // Clamper servo signal
+const uint8_t SERVO_PIN     = A4;   // Clamper servo signal (moved off A0 -> A0 is RIGHT line sensor)
 const uint8_t IR_REMOTE_PIN = A3;   // IR remote receiver
 
-// Line-tracking sensors use free analog pins (A0=servo, A3=IR remote are taken).
-const uint8_t IR_LINE_LEFT_PIN   = A4;
-const uint8_t IR_LINE_CENTER_PIN = A5;
-const uint8_t IR_LINE_RIGHT_PIN  = A2;
+// Line-tracking sensors -- VERIFIED via pin-finder scan (white~25, black~750).
+// Servo was moved A0 -> A4 so RIGHT (A0) no longer conflicts. A5 still free.
+const uint8_t IR_LINE_LEFT_PIN   = A2;
+const uint8_t IR_LINE_CENTER_PIN = A1;
+const uint8_t IR_LINE_RIGHT_PIN  = A0;
 
 // Declare global hardware references used from main sketch
 extern mecanumCar car;
