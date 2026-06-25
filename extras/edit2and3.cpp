@@ -8,10 +8,7 @@
     - Button 3: Rotate Left at 60, then move 3 right-markers starting at 40.
     - Button 4: Advance one black line, center on it, then stop (repeat per press).
     - Button 5: Strafe LEFT to the next line, re-center, then stop (only when centered).
-    - Button 6: Spin RIGHT ~180 degrees (sensor-based: skip 90-deg line, stop on 2nd
-                line via MID/centerline sensor), then line-follow one block and center.
-    - Button 7: Out 5 blocks (like button 1), spin RIGHT ~180, then 5 blocks back to
-                the start (ends facing the reversed direction).
+    - Button 6: Spin RIGHT ~180 degrees in place (timed).
   ================================================================
 */
 
@@ -38,25 +35,23 @@ extern uint8_t speed_Lower_R;
 #define CMD_4           0x0C // TODO: confirm the IR code your remote sends for button 4
 #define CMD_5           0x18 // TODO: confirm the IR code your remote sends for button 5
 #define CMD_6           0x5E // TODO: confirm the IR code your remote sends for button 6
-#define CMD_7           0x08 // TODO: confirm the IR code your remote sends for button 7
 #define CMD_STAR        0x42 // Emergency Stop
 
 // ── Speeds & Timing ───────────────────────────────────────────
 #define SPEED_START_FAST  60   // Normal forward start speed (Button 1)
 #define SPEED_START_SLOW  40   // Forward speed used after rotating (Button 2 & 3)
-#define SPEED_ROTATE      60   // Maintained strong speed for 90-degree rotations
+#define SPEED_ROTATE      50   // Fast speed for the blind swing-off at the start of a turn
 #define SPEED_MIN         35   // Safety floor so speed never hits 0
+#define TURN_CREEP_SPEED  35   // Slow creep speed while scent-seeking the line during a turn
 #define CENTER_OFFSET_MS  110    // ms to drive forward after final junction (timed nudge)
 #define CENTER_MAX_MS     800  // Safety cap for the sensor-based centering creep
 #define STRAFE_MAX_MS     2000 // Safety cap for strafing sideways to the next line
-#define TURN_BLIND_MS     150  // Blind turn duration to clear the starting line
-#define SPIN_180_MAX_MS   2000 // Safety cap for the sensor-based 180 spin (never spin forever)
+#define TURN_BLIND_MS     250  // 90-degree blind "sensor break" to clear the current line
+                               // 180-degree spin uses double this (TURN_BLIND_MS * 2) as its blind break
 
 // ── Turn Configuration ────────────────────────────────────────
 #define STOP_SENSOR_RIGHT_TURN  SENSOR_RIGHT
 #define STOP_SENSOR_LEFT_TURN   SENSOR_LEFT
-#define STOP_SENSOR_SPIN180     SENSOR_MID   // 180 spin counts on the centerline sensor →
-                                             // its 2nd crossing is a true 180 (no offset/nudge).
 
 mecanumCar car(3, 2);
 
@@ -79,33 +74,37 @@ void restoreIR() {
 //  TURN 90 DEGREES RIGHT (Maintains Speed 60)
 // ================================================================
 bool rotateRight90() {
-  Serial.println(F("\n--- Rotating 90 Degrees Right (Speed 60) ---"));
+  Serial.println(F("\n--- Rotating 90 Degrees Right (Blind swing + slow creep) ---"));
 
+  // --- STAGE 1: Blind Turn (Fast) ---
+  // Aggressively swing off the current line so the mid sensor clears it.
   unsigned long t_start = millis();
   while (millis() - t_start < TURN_BLIND_MS) {
     if (IrReceiver.decode() && IrReceiver.decodedIRData.command == CMD_STAR) {
-       Serial.println(F("E-STOP!")); restoreIR(); return false; 
+       Serial.println(F("E-STOP!")); restoreIR(); return false;
     }
-    setMotorSpeed(SPEED_ROTATE); // Maintained at 60
-    car.Turn_Right();          
+    setMotorSpeed(SPEED_ROTATE); // Fast blind swing-off
+    car.Turn_Right();
   }
 
+  // --- STAGE 2 & 3: Scent-Seeking Creep (Slow) + Mid-Sensor Lock ---
+  // Creep slowly until the CENTER sensor locks onto the next black line.
   while (true) {
     if (IrReceiver.decode() && IrReceiver.decodedIRData.command == CMD_STAR) {
-       Serial.println(F("E-STOP!")); restoreIR(); return false; 
+       Serial.println(F("E-STOP!")); restoreIR(); return false;
     }
 
-    setMotorSpeed(SPEED_ROTATE);
+    setMotorSpeed(TURN_CREEP_SPEED); // Slow creep to avoid momentum overshoot
     car.Turn_Right();
 
-    if (digitalRead(STOP_SENSOR_RIGHT_TURN) == HIGH) {
-      Serial.println(F("Line found! Stopping turn."));
+    if (digitalRead(SENSOR_RIGHT) == HIGH) {
+      Serial.println(F("Right sensor clipped line! Stopping turn."));
       break;
     }
   }
 
   car.Stop();
-  delay(200); 
+  delay(200);
   return true;
 }
 
@@ -113,33 +112,37 @@ bool rotateRight90() {
 //  TURN 90 DEGREES LEFT (Maintains Speed 60)
 // ================================================================
 bool rotateLeft90() {
-  Serial.println(F("\n--- Rotating 90 Degrees Left (Speed 60) ---"));
+  Serial.println(F("\n--- Rotating 90 Degrees Left (Blind swing + slow creep) ---"));
 
+  // --- STAGE 1: Blind Turn (Fast) ---
+  // Aggressively swing off the current line so the mid sensor clears it.
   unsigned long t_start = millis();
   while (millis() - t_start < TURN_BLIND_MS) {
     if (IrReceiver.decode() && IrReceiver.decodedIRData.command == CMD_STAR) {
-       Serial.println(F("E-STOP!")); restoreIR(); return false; 
+       Serial.println(F("E-STOP!")); restoreIR(); return false;
     }
-    setMotorSpeed(SPEED_ROTATE); // Maintained at 60
+    setMotorSpeed(SPEED_ROTATE); // Fast blind swing-off
     car.Turn_Left();
   }
 
+  // --- STAGE 2 & 3: Scent-Seeking Creep (Slow) + Mid-Sensor Lock ---
+  // Creep slowly until the CENTER sensor locks onto the next black line.
   while (true) {
     if (IrReceiver.decode() && IrReceiver.decodedIRData.command == CMD_STAR) {
-       Serial.println(F("E-STOP!")); restoreIR(); return false; 
+       Serial.println(F("E-STOP!")); restoreIR(); return false;
     }
 
-    setMotorSpeed(SPEED_ROTATE);
+    setMotorSpeed(TURN_CREEP_SPEED); // Slow creep to avoid momentum overshoot
     car.Turn_Left();
 
-    if (digitalRead(STOP_SENSOR_LEFT_TURN) == HIGH) {
-      Serial.println(F("Line found! Stopping turn."));
+    if (digitalRead(SENSOR_LEFT) == HIGH) {
+      Serial.println(F("Left sensor clipped line! Stopping turn."));
       break;
     }
   }
 
   car.Stop();
-  delay(200); 
+  delay(200);
   return true;
 }
 
@@ -148,7 +151,8 @@ bool rotateLeft90() {
 // ================================================================
 void moveForwardBlocks(int targetBlocks, uint8_t startSpeed, bool sensorCenter = false) {
   int junctionCount = 0;
-  bool onJunction = true; 
+  bool onJunction = true;
+  unsigned long lastJunctionTime = 0; // Debounce: ignore re-counts of the same thick line
 
   Serial.print(F("\n--- Moving Forward "));
   Serial.print(targetBlocks);
@@ -169,18 +173,19 @@ void moveForwardBlocks(int targetBlocks, uint8_t startSpeed, bool sensorCenter =
     uint8_t currentSpeed = (uint8_t)calculatedSpeed;
 
     if (L == HIGH && M == HIGH && R == HIGH) {
-      if (!onJunction) {
+      if (!onJunction && (millis() - lastJunctionTime > 200)) {
         junctionCount++;
+        lastJunctionTime = millis(); // Debounce timestamp for this junction
         Serial.print(F("Junction Crossed: "));
         Serial.print(junctionCount);
         Serial.print(F(" | Speed: "));
         Serial.println(calculatedSpeed);
-        onJunction = true; 
-        if (junctionCount == targetBlocks) break; 
+        onJunction = true;
+        if (junctionCount == targetBlocks) break;
       }
-      setMotorSpeed(currentSpeed);  
-      car.Advance();                  
-    } 
+      setMotorSpeed(currentSpeed);
+      car.Advance();
+    }
     else if (L == LOW && M == HIGH && R == LOW) {
       onJunction = false; 
       setMotorSpeed(currentSpeed);  
@@ -381,92 +386,43 @@ void strafeLeftToNextLine(uint8_t strafeSpeed) {
 }
 
 // ================================================================
-//  SPIN RIGHT ~180 DEGREES IN PLACE (sensor-based, Speed 60)
-//  Starts centered on a junction. Spins right, skips the line found
-//  near 90 degrees, and stops on the SECOND line (~180 deg) seen by
-//  the right sensor. Returns false if E-STOP was pressed.
+//  SPIN RIGHT ~180 DEGREES IN PLACE (timed, no sensors)
 // ================================================================
-bool spinRight180() {
-  Serial.println(F("\n--- Spinning Right ~180 degrees (MID sensor, Speed 60) ---"));
+void spinRight180() {
+  Serial.println(F("\n--- Spinning Right ~180 degrees (double blind break + mid-sensor lock) ---"));
 
-  // Phase 1: spin right until the MID sensor CLEARS the starting junction line.
-  // This is sensor-based (not a fixed time) so the spin can never over-rotate
-  // past the first arm — guaranteeing the next two crossings counted below are
-  // the ~90 and ~180 degree arms, not the ~180 and ~270 ones.
-  unsigned long t_guard = millis();
-  while (digitalRead(STOP_SENSOR_SPIN180) == HIGH) {
+  // --- STAGE 1: Blind Turn (Fast) ---
+  // Blind "sensor break" of DOUBLE the 90-degree duration so we swing well past
+  // the half-turn point and clear the current line completely.
+  unsigned long t_start = millis();
+  while (millis() - t_start < (TURN_BLIND_MS * 2)) {
     if (IrReceiver.decode() && IrReceiver.decodedIRData.command == CMD_STAR) {
-      Serial.println(F("E-STOP!")); restoreIR(); return false;
+      Serial.println(F("E-STOP!")); restoreIR(); return;
     }
-    if (millis() - t_guard > SPIN_180_MAX_MS) {   // safety: line never cleared
-      Serial.println(F("180 spin: start line never cleared — stopping."));
-      break;
-    }
-    setMotorSpeed(SPEED_ROTATE); // Spin clockwise in place at 60
+    setMotorSpeed(SPEED_ROTATE); // Fast blind swing
     car.Turn_Right();
   }
 
-  // Phase 2: keep spinning; count line crossings on the MID sensor. MID sits on
-  // the centerline (no sideways offset), so its 2nd crossing lands at a true
-  // ~180 degrees with no timing nudge. Skip the first (~90), stop on the second.
-  int  lineCount = 0;
-  bool onLine = false;          // Phase 1 already cleared the start line.
-  t_guard = millis();
-
+  // --- STAGE 2 & 3: Scent-Seeking Creep (Slow) + Mid-Sensor Lock ---
+  // Keep spinning slowly until the CENTER sensor locks onto the line.
   while (true) {
     if (IrReceiver.decode() && IrReceiver.decodedIRData.command == CMD_STAR) {
-      Serial.println(F("E-STOP!")); restoreIR(); return false;
+      Serial.println(F("E-STOP!")); restoreIR(); return;
     }
 
-    // Safety cap: never spin forever if a line is missed.
-    if (millis() - t_guard > SPIN_180_MAX_MS) {
-      Serial.println(F("180 spin timeout — stopping."));
-      break;
-    }
-
-    setMotorSpeed(SPEED_ROTATE);
+    setMotorSpeed(TURN_CREEP_SPEED); // Slow creep to avoid momentum overshoot
     car.Turn_Right();
 
-    if (digitalRead(STOP_SENSOR_SPIN180) == HIGH) {
-      if (!onLine) {            // rising edge: just reached a new line
-        onLine = true;
-        lineCount++;
-        Serial.print(F("Line crossing: "));
-        Serial.println(lineCount);
-        if (lineCount >= 2) {   // second line ≈ 180 degrees
-          Serial.println(F("Second line found — 180 reached."));
-          break;
-        }
-      }
-    } else {
-      onLine = false;           // sensor cleared the line; ready for next crossing
+    if (digitalRead(SENSOR_MID) == HIGH) {
+      Serial.println(F("Mid sensor locked on line! Stopping spin."));
+      break;
     }
   }
 
   car.Stop();
   delay(200);
   Serial.println(F("--- 180 Spin Completed. ---"));
-  return true;
-}
-
-// ================================================================
-//  ROUND TRIP: FORWARD 5, SPIN 180, FORWARD 5 (back to start)
-//  Drives out 5 blocks (exactly like button 1), spins right ~180 in
-//  place (the button-6 spin, without its trailing 1-block move), then
-//  drives 5 blocks back to the original position. Ends facing the
-//  reversed direction. Aborts before the return leg if E-STOP is
-//  pressed during the spin.
-// ================================================================
-void roundTrip180() {
-  Serial.println(F("\n=== Round Trip: out 5, spin 180, back 5 ==="));
-
-  moveForwardBlocks(5, SPEED_START_FAST);   // out leg (button 1)
-
-  if (!spinRight180()) return;              // E-STOP during spin: stop here
-
-  moveForwardBlocks(5, SPEED_START_FAST);   // return leg (button 1)
-
-  Serial.println(F("=== Round Trip complete — back at start, facing reversed. ==="));
+  restoreIR();
 }
 
 // ================================================================
@@ -488,8 +444,7 @@ void setup() {
   Serial.println(F("Press '3' to turn left and go 3 right-markers."));
   Serial.println(F("Press '4' to advance to the next black line, then stop."));
   Serial.println(F("Press '5' to strafe left to the next line (only when centered)."));
-  Serial.println(F("Press '6' to spin right ~180 (2nd line), then advance one block."));
-  Serial.println(F("Press '7' to go out 5, spin 180, and return to the start."));
+  Serial.println(F("Press '6' to spin right ~180 degrees in place."));
 }
 
 void loop() {
@@ -522,15 +477,8 @@ void loop() {
     // the middle sensor is on it. Runs only when currently centered. Press '5' to repeat.
     strafeLeftToNextLine(SPEED_START_SLOW);
   } else if (cmd == CMD_6) {
-    // Sensor-based ~180: spin right past the 90-deg line, stop on the 2nd line
-    // (right sensor), then line-follow forward one block and center on it.
-    if (spinRight180()) {
-      moveForwardBlocks(1, SPEED_START_SLOW, true);
-    }
-  } else if (cmd == CMD_7) {
-    // Out 5 blocks, spin right ~180 in place, then 5 blocks back to the
-    // original position (ends facing the opposite direction).
-    roundTrip180();
+    // Spin clockwise ~180 degrees in place (timed). Tune TURN_180_MS for an exact half-turn.
+    spinRight180();
   }
 
   IrReceiver.resume();
