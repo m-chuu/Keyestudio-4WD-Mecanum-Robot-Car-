@@ -4,11 +4,11 @@
 //  IRSensorCheck.cpp
 //  Checks the 3 line-tracking IR sensors SEPARATELY on the Serial Monitor.
 //
-//  VERIFIED WIRING (found via pin-finder scan):
-//      RIGHT  = A0
+//  VERIFIED WIRING (confirmed by physical sensor test):
+//      LEFT   = A0
 //      CENTER = A1
-//      LEFT   = A2
-//  (RobotSystem.h's old A4/A5/A2 guess was wrong -> floating reads.)
+//      RIGHT  = A2
+//  (Earlier pin-finder scan had LEFT/RIGHT swapped; corrected here.)
 //
 //  VERIFIED POLARITY (raw analogRead):
 //      white / reflective floor  ~=  25   (sensor LED lit)
@@ -19,9 +19,9 @@
 // =====================================================================
 
 // --- Line sensor pins (per main-2.cpp these were free; A3=IR remote) ---
-const uint8_t IR_LINE_RIGHT_PIN  = A0;
+const uint8_t IR_LINE_LEFT_PIN   = A0;
 const uint8_t IR_LINE_CENTER_PIN = A1;
-const uint8_t IR_LINE_LEFT_PIN   = A2;
+const uint8_t IR_LINE_RIGHT_PIN  = A2;
 
 // --- Detection tuning -------------------------------------------------
 // white ~25, black ~700+, so 400 sits safely between the two.
@@ -54,7 +54,7 @@ void setup() {
   Serial.println(F("====================================="));
   Serial.println(F("   3x IR LINE SENSOR CHECK (calib.)  "));
   Serial.println(F("====================================="));
-  Serial.println(F("Pins -> LEFT=A2  CENTER=A1  RIGHT=A0"));
+  Serial.println(F("Pins -> LEFT=A0  CENTER=A1  RIGHT=A2"));
   Serial.println(F("1 = black line detected, 0 = no line.\n"));
 }
 
