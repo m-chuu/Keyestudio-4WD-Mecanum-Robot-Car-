@@ -28,7 +28,7 @@ extern uint8_t speed_Lower_R;
 // The RIGHT wheels run stronger, so the right base is trimmed below the left
 // (straight-line values L=80 / R=74). Used directly as the base speeds.
 #define LINE_SPEED_L     80  // left  base (0-255)
-#define LINE_SPEED_R     72  // right base (calibrated straight-line value)
+#define LINE_SPEED_R     74  // right base (calibrated straight-line value)
 #define TURN_SLOW_SPEED  15  // slowed inner wheels during a correction
                              // (smaller = sharper turn; raise toward base = gentler)
 

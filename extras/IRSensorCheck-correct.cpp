@@ -28,22 +28,12 @@ const uint8_t IR_LINE_RIGHT_PIN  = A2;
 const int  THRESHOLD         = 400;
 const bool DETECT_WHEN_ABOVE = true;  // black line = HIGH raw => detected
 
-const unsigned long REPORT_MS = 50;   // fast refresh so you can watch the gradient
+const unsigned long REPORT_MS = 250;
 unsigned long lastReport = 0;
 
 int detected(int raw) {
   bool above = (raw > THRESHOLD);
   return (DETECT_WHEN_ABOVE ? above : !above) ? 1 : 0;
-}
-
-// Reading the three pins back-to-back lets the ADC's sample-and-hold capacitor
-// carry charge from the PREVIOUS channel ("ghosting"), which can make every
-// sensor snap to the same value (e.g. all ~790). Switch the mux with a throw-away
-// read, let it settle, then take the real reading so each value is independent.
-int readStable(uint8_t pin) {
-  analogRead(pin);            // throw-away: selects the channel
-  delayMicroseconds(200);     // let the sample-and-hold settle to THIS pin
-  return analogRead(pin);     // real reading
 }
 
 void printSensor(const __FlashStringHelper *name, int raw) {
@@ -72,9 +62,9 @@ void loop() {
   if (millis() - lastReport < REPORT_MS) return;
   lastReport = millis();
 
-  int rawLeft   = readStable(IR_LINE_LEFT_PIN);
-  int rawCenter = readStable(IR_LINE_CENTER_PIN);
-  int rawRight  = readStable(IR_LINE_RIGHT_PIN);
+  int rawLeft   = analogRead(IR_LINE_LEFT_PIN);
+  int rawCenter = analogRead(IR_LINE_CENTER_PIN);
+  int rawRight  = analogRead(IR_LINE_RIGHT_PIN);
 
   printSensor(F("LEFT"),   rawLeft);
   printSensor(F("CENTER"), rawCenter);
