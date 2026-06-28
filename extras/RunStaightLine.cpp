@@ -15,8 +15,7 @@ extern uint8_t speed_Upper_R;
 extern uint8_t speed_Lower_R;
 
 // ── IR Codes ──────────────────────────────────────────────────
-#define CMD_1           0x16 // Press '1' = bang-bang line-following
-#define CMD_2           0x19 // Press '2' = PID line-following
+#define CMD_3           0x0D // Press '3' = follow line, stop after N junctions
 #define CMD_STAR        0x42 // '*' = emergency stop
 
 // ── Drive configuration ───────────────────────────────────────
@@ -28,7 +27,7 @@ extern uint8_t speed_Lower_R;
 // The RIGHT wheels run stronger, so the right base is trimmed below the left
 // (straight-line values L=80 / R=74). Used directly as the base speeds.
 #define LINE_SPEED_L     80  // left  base (0-255)
-#define LINE_SPEED_R     72  // right base (calibrated straight-line value)
+#define LINE_SPEED_R     74  // right base (calibrated straight-line value)
 #define TURN_SLOW_SPEED  15  // slowed inner wheels during a correction
                              // (smaller = sharper turn; raise toward base = gentler)
 
@@ -46,6 +45,13 @@ mecanumCar car(3, 2);
 void restoreIR() {
   car.Stop();
   IrReceiver.begin(RECV_PIN, false);
+}
+
+// True only when ALL three sensors sit on black at once — i.e. the car is
+// straddling a horizontal cross-line (a junction). Adapted from your snippet
+// to this sketch's pin macros (SENSOR_LEFT/MID/RIGHT).
+static bool allOnBlack() {
+  return ON_BLACK(SENSOR_LEFT) && ON_BLACK(SENSOR_MID) && ON_BLACK(SENSOR_RIGHT);
 }
 
 // Returns true if the '*' emergency-stop key was pressed.
@@ -76,34 +82,79 @@ void driveFront(uint8_t leftSpd, uint8_t rightSpd) {
 }
 
 // ================================================================
-//  LINE FOLLOW  (steering correction on the two front wheels)
+//  FOLLOW LINE, STOP AFTER N JUNCTIONS  (bang-bang steering + counting)
 //
-//  Crawl forward while keeping the MIDDLE sensor on the black line.
-//   • line drifts under RIGHT sensor  -> body moved LEFT  -> steer RIGHT
-//        (slow the front-RIGHT wheel so the robot curves right)
-//   • line drifts under LEFT  sensor  -> body moved RIGHT -> steer LEFT
-//        (slow the front-LEFT wheel so the robot curves left)
-//   • only MIDDLE on black            -> centered -> drive straight
-//   • no sensor on black              -> line lost -> STOP
-//  '*' on the remote stops at any time.
+//  Crawls forward using the EXACT bang-bang steering from followLine()
+//  (outer sensors trim one wheel via TURN_SLOW_SPEED) while watching for
+//  horizontal cross-lines. Each time all three sensors hit black at once
+//  (allOnBlack) a new junction is counted; the car stops the instant the
+//  target count is reached — sitting on that final cross-line.
+//
+//   • onJunction starts TRUE so the line under the car at launch isn't counted.
+//   • It re-arms (onJunction = false) only after the car is back on a plain
+//     vertical line (middle sensor only), so one wide cross-line counts once.
+//   • Line lost (no sensor on black) -> keep driving straight (per followLine).
+//   • '*' on the remote aborts at any time.
 // ================================================================
-void followLine() {
-  Serial.println(F("Line-follow START - crawling forward with steering correction."));
+void stopByCounting(int targetCount) {
+  Serial.print(F("Counting START - follow line, stop after "));
+  Serial.print(targetCount);
+  Serial.println(F(" junction(s)."));
 
-  while (true) {
+  int  count = 0;            // how many cross-lines crossed so far
+  bool onJunction = true;    // true while straddling a cross-line (starts true
+                             // so the launch line isn't counted)
+  unsigned long lastReport = 0;   // non-blocking serial-debug timer
+
+  while (count < targetCount) {
     bool onLeft  = ON_BLACK(SENSOR_LEFT);
     bool onRight = ON_BLACK(SENSOR_RIGHT);
 
-    if (onRight) {
-      // drifted left -> steer RIGHT (slow the right wheels)
-      driveFront(LINE_SPEED_L, TURN_SLOW_SPEED);
-    } else if (onLeft) {
-      // drifted right -> steer LEFT (slow the left wheels)
-      driveFront(TURN_SLOW_SPEED, LINE_SPEED_R);
-    } else {
-      // centered OR line lost -> drive straight at base speeds
+    // --- Non-blocking debug: report sensor states every 500 ms ---
+    if (millis() - lastReport > 500) {
+      lastReport = millis();
+      Serial.print(F("[SEARCH] IR L/C/R = "));
+      Serial.print(ON_BLACK(SENSOR_LEFT)  ? 1 : 0); Serial.print(F(" "));
+      Serial.print(ON_BLACK(SENSOR_MID)   ? 1 : 0); Serial.print(F(" "));
+      Serial.print(ON_BLACK(SENSOR_RIGHT) ? 1 : 0);
+      Serial.print(F("   (count="));
+      Serial.print(count);
+      Serial.println(F(", motors commanded FORWARD)"));
+    }
+
+    // --- JUNCTION: all three sensors on black at once ---
+    if (allOnBlack()) {
+      if (!onJunction) {            // rising edge: a brand-new cross-line
+        count++;
+        onJunction = true;          // lock so this same line counts only once
+        Serial.print(F("  Junction crossed: "));
+        Serial.println(count);
+        if (count == targetCount) {
+          break;                    // target hit -> stop on this line
+        }
+      }
+      // Keep crossing straight so the steering logic doesn't misread the
+      // wide black band as a one-sided correction.
       driveFront(LINE_SPEED_L, LINE_SPEED_R);
     }
+    // --- NOT a junction: steer to stay on the line (exact followLine logic) ---
+    else {
+      // Re-arm the counter once back on a plain vertical line (middle only).
+      if (!onLeft && !onRight) {
+        onJunction = false;
+      }
+
+      if (onRight) {
+        // drifted left -> steer RIGHT (slow the right wheels)
+        driveFront(LINE_SPEED_L, TURN_SLOW_SPEED);
+      } else if (onLeft) {
+        // drifted right -> steer LEFT (slow the left wheels)
+        driveFront(TURN_SLOW_SPEED, LINE_SPEED_R);
+      } else {
+        // centered OR line lost -> drive straight at base speeds
+        driveFront(LINE_SPEED_L, LINE_SPEED_R);
+      }
+    }
 
     if (emergencyStopPressed()) {
       Serial.println(F("  * Emergency stop pressed."));
@@ -112,68 +163,8 @@ void followLine() {
   }
 
   car.Stop();
-  Serial.println(F("Line-follow STOP."));
-  restoreIR();
-}
-
-// ================================================================
-//  LINE FOLLOW  (PID version — alternative to the bang-bang one above)
-//
-//  Same sensor/steering convention, but instead of three fixed speeds
-//  it builds a continuous correction from a 5-level error (-2..+2) and
-//  trims the two front wheels proportionally.
-//
-//  With only 3 on/off sensors the error is coarse, so:
-//    Kp (proportional) does the real work — graduated steering
-//    Kd (derivative)   damps wobble at transitions
-//    Ki (integral)     keep 0 — near-useless on 3 sensors, prone to windup
-// ================================================================
-float Kp = 12.0;   // steering strength  (lower if it oscillates)
-float Kd = 5.0;    // wobble damping
-float Ki = 0.0;    // leave at 0
-
-void followLinePID() {
-  Serial.println(F("Line-follow START - PID control active."));
-
-  // Fresh state each run (must NOT carry over from a previous run).
-  int  error = 0, lastError = 0;
-  long integral = 0;
-
-  while (true) {
-    bool onLeft  = ON_BLACK(SENSOR_LEFT);
-    bool onMid   = ON_BLACK(SENSOR_MID);
-    bool onRight = ON_BLACK(SENSOR_RIGHT);
-
-    // 1. ERROR: where is the line vs centre? (+ = robot is LEFT of the line)
-    if      ( onLeft && !onMid && !onRight) error = -2;  // robot far right
-    else if ( onLeft &&  onMid && !onRight) error = -1;  // robot slightly right
-    else if (!onLeft &&  onMid && !onRight) error =  0;  // centred
-    else if (!onLeft &&  onMid &&  onRight) error =  1;  // robot slightly left
-    else if (!onLeft && !onMid &&  onRight) error =  2;  // robot far left
-    else if (!onLeft && !onMid && !onRight) error =  0;  // line lost -> go straight
-    // else: ambiguous (junction / both outer) -> keep the previous error
-
-    // 2. PID TERMS
-    integral += error;
-    int derivative = error - lastError;
-    lastError = error;
-
-    // 3. CORRECTION (+ steers right: left wheels faster, right slower)
-    float correction = (Kp * error) + (Ki * integral) + (Kd * derivative);
-
-    // 4. APPLY to the base speeds, clamped to 0..255
-    int leftSpd  = constrain((int)(LINE_SPEED_L + correction), 0, 255);
-    int rightSpd = constrain((int)(LINE_SPEED_R - correction), 0, 255);
-    driveFront(leftSpd, rightSpd);
-
-    if (emergencyStopPressed()) {
-      Serial.println(F("  * Emergency stop pressed."));
-      break;
-    }
-  }
-
-  car.Stop();
-  Serial.println(F("Line-follow STOP."));
+  Serial.print(F("Counting STOP - junctions crossed: "));
+  Serial.println(count);
   restoreIR();
 }
 
@@ -187,7 +178,7 @@ void setup() {
   car.Init();                      // bring the motor controller to a known state
   IrReceiver.begin(RECV_PIN, false);
 
-  Serial.println(F("Ready. '1' = bang-bang follow, '2' = PID follow, '*' = stop."));
+  Serial.println(F("Ready. '3' = follow + stop after 3 junctions, '*' = stop."));
 }
 
 void loop() {
@@ -195,10 +186,8 @@ void loop() {
     uint8_t key = IrReceiver.decodedIRData.command;
     IrReceiver.resume();
 
-    if (key == CMD_1) {
-      followLine();        // bang-bang (3 fixed speeds)
-    } else if (key == CMD_2) {
-      followLinePID();     // PID (graduated correction)
+    if (key == CMD_3) {
+      stopByCounting(3);   // follow line, stop after 3 junctions
     }
   }
   delay(50);
