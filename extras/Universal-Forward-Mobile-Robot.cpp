@@ -8,6 +8,11 @@
 #define SENSOR_MID      A1   // middle sensor — should stay on the black line
 #define SENSOR_RIGHT    A2   // right line sensor
 
+// ── Cached sensor readings (updated once per loop) ───────────
+static int sensorLeftVal = 0;
+static int sensorMidVal = 0;
+static int sensorRightVal = 0;
+
 // ── EXTERN LIBRARY VARIABLES ──────────────────────────────────
 extern uint8_t speed_Upper_L;
 extern uint8_t speed_Lower_L;
@@ -27,8 +32,8 @@ extern uint8_t speed_Lower_R;
 // Forward base speeds, per side, from the straight-line calibration.
 // The RIGHT wheels run stronger, so the right base is trimmed below the left
 // (straight-line values L=80 / R=74). Used directly as the base speeds.
-#define LINE_SPEED_L     80  //80// left  base (0-255)
-#define LINE_SPEED_R     62  //74// right base (calibrated straight-line value)
+#define LINE_SPEED_L     40  //80// left  base (0-255)
+#define LINE_SPEED_R     31  //74// right base (calibrated straight-line value)
 #define TURN_SLOW_SPEED  15  // slowed inner wheels during a correction
                              // (smaller = sharper turn; raise toward base = gentler)
 
@@ -51,7 +56,27 @@ void restoreIR() {
 // True only when ALL three sensors sit on black at once — i.e. the car is
 // straddling a horizontal cross-line (a junction).
 static bool allOnBlack() {
-  return ON_BLACK(SENSOR_LEFT) && ON_BLACK(SENSOR_MID) && ON_BLACK(SENSOR_RIGHT);
+  return (sensorLeftVal > BLACK_THRESHOLD) && (sensorMidVal > BLACK_THRESHOLD) && (sensorRightVal > BLACK_THRESHOLD);
+}
+
+// Inline helpers using cached values
+static inline bool onLeftBlack() {
+  return sensorLeftVal > BLACK_THRESHOLD;
+}
+
+static inline bool onMidBlack() {
+  return sensorMidVal > BLACK_THRESHOLD;
+}
+
+static inline bool onRightBlack() {
+  return sensorRightVal > BLACK_THRESHOLD;
+}
+
+// Read all sensors once and cache values
+static inline void readSensors() {
+  sensorLeftVal = analogRead(SENSOR_LEFT);
+  sensorMidVal = analogRead(SENSOR_MID);
+  sensorRightVal = analogRead(SENSOR_RIGHT);
 }
 
 // Returns true if the '*' emergency-stop key was pressed.
@@ -97,12 +122,12 @@ bool RunSelfAudit() {
   pinMode(SENSOR_RIGHT, INPUT);
 
   // Reading baseline to check if pins are floating or shorted
-  int leftCheck = digitalRead(SENSOR_LEFT);
-  int midCheck = digitalRead(SENSOR_MID);
-  int rightCheck = digitalRead(SENSOR_RIGHT);
+  readSensors();
 
-  if (leftCheck == HIGH && midCheck == HIGH && rightCheck == HIGH) {
-    Serial.println(F("WARNING: All IR pins pulling HIGH. Check Rail Power."));
+  if (sensorLeftVal < 50 && sensorMidVal < 50 && sensorRightVal < 50) {
+    Serial.println(F("WARNING: All IR pins pulling LOW. Check sensor power/connections."));
+  } else if (sensorLeftVal > 900 && sensorMidVal > 900 && sensorRightVal > 900) {
+    Serial.println(F("WARNING: All IR pins maxed out. Check for dust/contamination."));
   } else {
     Serial.println(F("OK"));
   }
@@ -183,9 +208,12 @@ void HomeRobot() {
   unsigned long lastReport = 0;
 
   while (!lineFound) {
+    // Read all sensors once at the start of the loop
+    readSensors();
+
     // Actively steer toward the line using outer sensors
-    bool onLeft  = ON_BLACK(SENSOR_LEFT);
-    bool onRight = ON_BLACK(SENSOR_RIGHT);
+    bool onLeft  = onLeftBlack();
+    bool onRight = onRightBlack();
     FollowLine(onLeft, onRight, LINE_SPEED_L, LINE_SPEED_R);
 
     // Check if all three sensors are on black line simultaneously
@@ -199,9 +227,9 @@ void HomeRobot() {
     if (millis() - lastReport > 100) {
       lastReport = millis();
       Serial.print(F("[HOMING] IR L/C/R = "));
-      Serial.print(ON_BLACK(SENSOR_LEFT)  ? 1 : 0); Serial.print(F(" "));
-      Serial.print(ON_BLACK(SENSOR_MID)   ? 1 : 0); Serial.print(F(" "));
-      Serial.print(ON_BLACK(SENSOR_RIGHT) ? 1 : 0);
+      Serial.print(onLeftBlack()  ? 1 : 0); Serial.print(F(" "));
+      Serial.print(onMidBlack()   ? 1 : 0); Serial.print(F(" "));
+      Serial.print(onRightBlack() ? 1 : 0);
       Serial.println(F("   (motors commanded via FollowLine)"));
     }
 
@@ -253,16 +281,19 @@ void stopByCounting(int targetCount) {
   unsigned long lastReport = 0;   // non-blocking serial-debug timer
 
   while (count < targetCount) {
-    bool onLeft  = ON_BLACK(SENSOR_LEFT);
-    bool onRight = ON_BLACK(SENSOR_RIGHT);
+    // Read all sensors once at the start of the loop
+    readSensors();
+
+    bool onLeft  = onLeftBlack();
+    bool onRight = onRightBlack();
 
     // --- Non-blocking debug: report sensor states every 500 ms ---
     if (millis() - lastReport > 500) {
       lastReport = millis();
       Serial.print(F("[SEARCH] IR L/C/R = "));
-      Serial.print(ON_BLACK(SENSOR_LEFT)  ? 1 : 0); Serial.print(F(" "));
-      Serial.print(ON_BLACK(SENSOR_MID)   ? 1 : 0); Serial.print(F(" "));
-      Serial.print(ON_BLACK(SENSOR_RIGHT) ? 1 : 0);
+      Serial.print(onLeftBlack()  ? 1 : 0); Serial.print(F(" "));
+      Serial.print(onMidBlack()   ? 1 : 0); Serial.print(F(" "));
+      Serial.print(onRightBlack() ? 1 : 0);
       Serial.print(F("   (count="));
       Serial.print(count);
       Serial.println(F(", motors via FollowLine)"));

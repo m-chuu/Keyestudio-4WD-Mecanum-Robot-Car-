@@ -8,6 +8,11 @@
 #define SENSOR_MID      A1   // middle sensor — should stay on the black line
 #define SENSOR_RIGHT    A2   // right line sensor
 
+// ── Cached sensor readings (updated once per loop) ───────────
+static int sensorLeftVal = 0;
+static int sensorMidVal = 0;
+static int sensorRightVal = 0;
+
 // ── EXTERN LIBRARY VARIABLES ──────────────────────────────────
 extern uint8_t speed_Upper_L;
 extern uint8_t speed_Lower_L;
@@ -27,8 +32,8 @@ extern uint8_t speed_Lower_R;
 // Forward base speeds, per side, from the straight-line calibration.
 // The RIGHT wheels run stronger, so the right base is trimmed below the left
 // (straight-line values L=80 / R=74). Used directly as the base speeds.
-#define LINE_SPEED_L     80  //80// left  base (0-255)
-#define LINE_SPEED_R     74  //62// right base (calibrated straight-line value)
+#define LINE_SPEED_L     40  //80// left  base (0-255)
+#define LINE_SPEED_R     31  //74// right base (calibrated straight-line value)
 #define TURN_SLOW_SPEED  15  // slowed inner wheels during a correction
                              // (smaller = sharper turn; raise toward base = gentler)
 
@@ -51,7 +56,27 @@ void restoreIR() {
 // True only when ALL three sensors sit on black at once — i.e. the car is
 // straddling a horizontal cross-line (a junction).
 static bool allOnBlack() {
-  return ON_BLACK(SENSOR_LEFT) && ON_BLACK(SENSOR_MID) && ON_BLACK(SENSOR_RIGHT);
+  return (sensorLeftVal > BLACK_THRESHOLD) && (sensorMidVal > BLACK_THRESHOLD) && (sensorRightVal > BLACK_THRESHOLD);
+}
+
+// Inline helpers using cached values
+static inline bool onLeftBlack() {
+  return sensorLeftVal > BLACK_THRESHOLD;
+}
+
+static inline bool onMidBlack() {
+  return sensorMidVal > BLACK_THRESHOLD;
+}
+
+static inline bool onRightBlack() {
+  return sensorRightVal > BLACK_THRESHOLD;
+}
+
+// Read all sensors once and cache values
+static inline void readSensors() {
+  sensorLeftVal = analogRead(SENSOR_LEFT);
+  sensorMidVal = analogRead(SENSOR_MID);
+  sensorRightVal = analogRead(SENSOR_RIGHT);
 }
 
 // Returns true if the '*' emergency-stop key was pressed.
@@ -97,12 +122,12 @@ bool RunSelfAudit() {
   pinMode(SENSOR_RIGHT, INPUT);
 
   // Reading baseline to check if pins are floating or shorted
-  int leftCheck = digitalRead(SENSOR_LEFT);
-  int midCheck = digitalRead(SENSOR_MID);
-  int rightCheck = digitalRead(SENSOR_RIGHT);
+  readSensors();
 
-  if (leftCheck == HIGH && midCheck == HIGH && rightCheck == HIGH) {
-    Serial.println(F("WARNING: All IR pins pulling HIGH. Check Rail Power."));
+  if (sensorLeftVal < 50 && sensorMidVal < 50 && sensorRightVal < 50) {
+    Serial.println(F("WARNING: All IR pins pulling LOW. Check sensor power/connections."));
+  } else if (sensorLeftVal > 900 && sensorMidVal > 900 && sensorRightVal > 900) {
+    Serial.println(F("WARNING: All IR pins maxed out. Check for dust/contamination."));
   } else {
     Serial.println(F("OK"));
   }
@@ -137,23 +162,59 @@ bool RunSelfAudit() {
 }
 
 // ================================================================
+//  LINE FOLLOWING: Bang-bang steering with customizable base speeds
+//
+//  Uses outer sensors (onLeft, onRight) to apply steering via TURN_SLOW_SPEED
+//  on the inner wheels while maintaining the provided base speeds.
+//
+//   • When centered or line lost: drive straight at baseSpeedL and baseSpeedR
+//   • When drifted: slow the inner wheels to TURN_SLOW_SPEED
+//   • Updates global speed variables before each motor command
+// ================================================================
+void FollowLine(bool onLeft, bool onRight, uint8_t baseSpeedL, uint8_t baseSpeedR) {
+  if (onRight) {
+    // drifted left -> steer RIGHT (slow the right wheels)
+    speed_Upper_L = baseSpeedL;
+    speed_Lower_L = baseSpeedL;
+    speed_Upper_R = TURN_SLOW_SPEED;
+    speed_Lower_R = TURN_SLOW_SPEED;
+    driveFront(baseSpeedL, TURN_SLOW_SPEED);
+  } else if (onLeft) {
+    // drifted right -> steer LEFT (slow the left wheels)
+    speed_Upper_L = TURN_SLOW_SPEED;
+    speed_Lower_L = TURN_SLOW_SPEED;
+    speed_Upper_R = baseSpeedR;
+    speed_Lower_R = baseSpeedR;
+    driveFront(TURN_SLOW_SPEED, baseSpeedR);
+  } else {
+    // centered OR line lost -> drive straight at base speeds
+    speed_Upper_L = baseSpeedL;
+    speed_Lower_L = baseSpeedL;
+    speed_Upper_R = baseSpeedR;
+    speed_Lower_R = baseSpeedR;
+    driveFront(baseSpeedL, baseSpeedR);
+  }
+}
+
+// ================================================================
 //  HOMING SEQUENCE: Drive to black-line anchor
 // ================================================================
 void HomeRobot() {
   Serial.println(F("Entering Homing Mode..."));
   Serial.println(F("Searching for Black Line Anchor..."));
 
-  // Set driving speed for homing approach
-  speed_Upper_L = 60; speed_Lower_L = 60;
-  speed_Upper_R = 60; speed_Lower_R = 60;
-
   bool lineFound = false;
   unsigned long timeoutGate = millis();
   unsigned long lastReport = 0;
 
   while (!lineFound) {
-    // Re-assert forward drive continuously to overcome any I2C frame drops
-    driveFront(60, 60);
+    // Read all sensors once at the start of the loop
+    readSensors();
+
+    // Actively steer toward the line using outer sensors
+    bool onLeft  = onLeftBlack();
+    bool onRight = onRightBlack();
+    FollowLine(onLeft, onRight, 60, 60);
 
     // Check if all three sensors are on black line simultaneously
     if (allOnBlack()) {
@@ -166,10 +227,10 @@ void HomeRobot() {
     if (millis() - lastReport > 100) {
       lastReport = millis();
       Serial.print(F("[HOMING] IR L/C/R = "));
-      Serial.print(ON_BLACK(SENSOR_LEFT)  ? 1 : 0); Serial.print(F(" "));
-      Serial.print(ON_BLACK(SENSOR_MID)   ? 1 : 0); Serial.print(F(" "));
-      Serial.print(ON_BLACK(SENSOR_RIGHT) ? 1 : 0);
-      Serial.println(F("   (motors commanded FORWARD)"));
+      Serial.print(onLeftBlack()  ? 1 : 0); Serial.print(F(" "));
+      Serial.print(onMidBlack()   ? 1 : 0); Serial.print(F(" "));
+      Serial.print(onRightBlack() ? 1 : 0);
+      Serial.println(F("   (motors commanded via FollowLine)"));
     }
 
     // Safety fallback: timeout after 30 seconds
@@ -198,15 +259,14 @@ void HomeRobot() {
 // ================================================================
 //  FOLLOW LINE, STOP AFTER N JUNCTIONS  (bang-bang steering + counting)
 //
-//  Crawls forward using bang-bang steering (outer sensors trim one wheel via
-//  TURN_SLOW_SPEED) while watching for horizontal cross-lines. Each time all
-//  three sensors hit black at once (allOnBlack) a new junction is counted;
-//  the car stops the instant the target count is reached.
+//  Crawls forward using bang-bang steering (via FollowLine) while watching
+//  for horizontal cross-lines. Each time all three sensors hit black at once
+//  (allOnBlack) a new junction is counted; the car stops when target is reached.
 //
 //   • onJunction starts TRUE so the line under the car at launch isn't counted.
 //   • It re-arms (onJunction = false) only after the car is back on a plain
 //     vertical line (middle sensor only), so one wide cross-line counts once.
-//   • Line lost (no sensor on black) -> keep driving straight.
+//   • Line lost (no sensor on black) -> FollowLine() keeps driving straight.
 //   • '*' on the remote aborts at any time.
 // ================================================================
 
@@ -221,19 +281,22 @@ void stopByCounting(int targetCount) {
   unsigned long lastReport = 0;   // non-blocking serial-debug timer
 
   while (count < targetCount) {
-    bool onLeft  = ON_BLACK(SENSOR_LEFT);
-    bool onRight = ON_BLACK(SENSOR_RIGHT);
+    // Read all sensors once at the start of the loop
+    readSensors();
+
+    bool onLeft  = onLeftBlack();
+    bool onRight = onRightBlack();
 
     // --- Non-blocking debug: report sensor states every 500 ms ---
     if (millis() - lastReport > 500) {
       lastReport = millis();
       Serial.print(F("[SEARCH] IR L/C/R = "));
-      Serial.print(ON_BLACK(SENSOR_LEFT)  ? 1 : 0); Serial.print(F(" "));
-      Serial.print(ON_BLACK(SENSOR_MID)   ? 1 : 0); Serial.print(F(" "));
-      Serial.print(ON_BLACK(SENSOR_RIGHT) ? 1 : 0);
+      Serial.print(onLeftBlack()  ? 1 : 0); Serial.print(F(" "));
+      Serial.print(onMidBlack()   ? 1 : 0); Serial.print(F(" "));
+      Serial.print(onRightBlack() ? 1 : 0);
       Serial.print(F("   (count="));
       Serial.print(count);
-      Serial.println(F(", motors commanded FORWARD)"));
+      Serial.println(F(", motors via FollowLine)"));
     }
 
     // --- JUNCTION: all three sensors on black at once ---
@@ -249,7 +312,7 @@ void stopByCounting(int targetCount) {
       }
       // Keep crossing straight so the steering logic doesn't misread the
       // wide black band as a one-sided correction.
-      driveFront(LINE_SPEED_L, LINE_SPEED_R);
+      FollowLine(onLeft, onRight, LINE_SPEED_L, LINE_SPEED_R);
     }
     // --- NOT a junction: steer to stay on the line ---
     else {
@@ -258,16 +321,7 @@ void stopByCounting(int targetCount) {
         onJunction = false;
       }
 
-      if (onRight) {
-        // drifted left -> steer RIGHT (slow the right wheels)
-        driveFront(LINE_SPEED_L, TURN_SLOW_SPEED);
-      } else if (onLeft) {
-        // drifted right -> steer LEFT (slow the left wheels)
-        driveFront(TURN_SLOW_SPEED, LINE_SPEED_R);
-      } else {
-        // centered OR line lost -> drive straight at base speeds
-        driveFront(LINE_SPEED_L, LINE_SPEED_R);
-      }
+      FollowLine(onLeft, onRight, LINE_SPEED_L, LINE_SPEED_R);
     }
 
     if (emergencyStopPressed()) {
@@ -312,7 +366,7 @@ void loop() {
     }
     else if (key == CMD_3) {
       Serial.println(F("{\"status\":\"BUSY\",\"state\":\"BUSY\"}"));
-      stopByCounting(3);   // follow line, stop after 3 junctions
+      stopByCounting(4);   // follow line, stop after 3 junctions
     }
   }
   delay(50);
