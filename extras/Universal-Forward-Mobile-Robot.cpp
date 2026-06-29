@@ -28,7 +28,7 @@ extern uint8_t speed_Lower_R;
 // The RIGHT wheels run stronger, so the right base is trimmed below the left
 // (straight-line values L=80 / R=74). Used directly as the base speeds.
 #define LINE_SPEED_L     80  //80// left  base (0-255)
-#define LINE_SPEED_R     74  //62// right base (calibrated straight-line value)
+#define LINE_SPEED_R     62  //74// right base (calibrated straight-line value)
 #define TURN_SLOW_SPEED  15  // slowed inner wheels during a correction
                              // (smaller = sharper turn; raise toward base = gentler)
 
@@ -137,23 +137,56 @@ bool RunSelfAudit() {
 }
 
 // ================================================================
+//  LINE FOLLOWING: Bang-bang steering with customizable base speeds
+//
+//  Uses outer sensors (onLeft, onRight) to apply steering via TURN_SLOW_SPEED
+//  on the inner wheels while maintaining the provided base speeds.
+//
+//   • When centered or line lost: drive straight at baseSpeedL and baseSpeedR
+//   • When drifted: slow the inner wheels to TURN_SLOW_SPEED
+//   • Updates global speed variables before each motor command
+// ================================================================
+void FollowLine(bool onLeft, bool onRight, uint8_t baseSpeedL, uint8_t baseSpeedR) {
+  if (onRight) {
+    // drifted left -> steer RIGHT (slow the right wheels)
+    speed_Upper_L = baseSpeedL;
+    speed_Lower_L = baseSpeedL;
+    speed_Upper_R = TURN_SLOW_SPEED;
+    speed_Lower_R = TURN_SLOW_SPEED;
+    driveFront(baseSpeedL, TURN_SLOW_SPEED);
+  } else if (onLeft) {
+    // drifted right -> steer LEFT (slow the left wheels)
+    speed_Upper_L = TURN_SLOW_SPEED;
+    speed_Lower_L = TURN_SLOW_SPEED;
+    speed_Upper_R = baseSpeedR;
+    speed_Lower_R = baseSpeedR;
+    driveFront(TURN_SLOW_SPEED, baseSpeedR);
+  } else {
+    // centered OR line lost -> drive straight at base speeds
+    speed_Upper_L = baseSpeedL;
+    speed_Lower_L = baseSpeedL;
+    speed_Upper_R = baseSpeedR;
+    speed_Lower_R = baseSpeedR;
+    driveFront(baseSpeedL, baseSpeedR);
+  }
+}
+
+// ================================================================
 //  HOMING SEQUENCE: Drive to black-line anchor
 // ================================================================
 void HomeRobot() {
   Serial.println(F("Entering Homing Mode..."));
   Serial.println(F("Searching for Black Line Anchor..."));
 
-  // Set driving speed for homing approach
-  speed_Upper_L = 60; speed_Lower_L = 60;
-  speed_Upper_R = 60; speed_Lower_R = 60;
-
   bool lineFound = false;
   unsigned long timeoutGate = millis();
   unsigned long lastReport = 0;
 
   while (!lineFound) {
-    // Re-assert forward drive continuously to overcome any I2C frame drops
-    driveFront(60, 60);
+    // Actively steer toward the line using outer sensors
+    bool onLeft  = ON_BLACK(SENSOR_LEFT);
+    bool onRight = ON_BLACK(SENSOR_RIGHT);
+    FollowLine(onLeft, onRight, LINE_SPEED_L, LINE_SPEED_R);
 
     // Check if all three sensors are on black line simultaneously
     if (allOnBlack()) {
@@ -169,7 +202,7 @@ void HomeRobot() {
       Serial.print(ON_BLACK(SENSOR_LEFT)  ? 1 : 0); Serial.print(F(" "));
       Serial.print(ON_BLACK(SENSOR_MID)   ? 1 : 0); Serial.print(F(" "));
       Serial.print(ON_BLACK(SENSOR_RIGHT) ? 1 : 0);
-      Serial.println(F("   (motors commanded FORWARD)"));
+      Serial.println(F("   (motors commanded via FollowLine)"));
     }
 
     // Safety fallback: timeout after 30 seconds
@@ -198,15 +231,14 @@ void HomeRobot() {
 // ================================================================
 //  FOLLOW LINE, STOP AFTER N JUNCTIONS  (bang-bang steering + counting)
 //
-//  Crawls forward using bang-bang steering (outer sensors trim one wheel via
-//  TURN_SLOW_SPEED) while watching for horizontal cross-lines. Each time all
-//  three sensors hit black at once (allOnBlack) a new junction is counted;
-//  the car stops the instant the target count is reached.
+//  Crawls forward using bang-bang steering (via FollowLine) while watching
+//  for horizontal cross-lines. Each time all three sensors hit black at once
+//  (allOnBlack) a new junction is counted; the car stops when target is reached.
 //
 //   • onJunction starts TRUE so the line under the car at launch isn't counted.
 //   • It re-arms (onJunction = false) only after the car is back on a plain
 //     vertical line (middle sensor only), so one wide cross-line counts once.
-//   • Line lost (no sensor on black) -> keep driving straight.
+//   • Line lost (no sensor on black) -> FollowLine() keeps driving straight.
 //   • '*' on the remote aborts at any time.
 // ================================================================
 
@@ -233,7 +265,7 @@ void stopByCounting(int targetCount) {
       Serial.print(ON_BLACK(SENSOR_RIGHT) ? 1 : 0);
       Serial.print(F("   (count="));
       Serial.print(count);
-      Serial.println(F(", motors commanded FORWARD)"));
+      Serial.println(F(", motors via FollowLine)"));
     }
 
     // --- JUNCTION: all three sensors on black at once ---
@@ -249,7 +281,7 @@ void stopByCounting(int targetCount) {
       }
       // Keep crossing straight so the steering logic doesn't misread the
       // wide black band as a one-sided correction.
-      driveFront(LINE_SPEED_L, LINE_SPEED_R);
+      FollowLine(onLeft, onRight, LINE_SPEED_L, LINE_SPEED_R);
     }
     // --- NOT a junction: steer to stay on the line ---
     else {
@@ -258,16 +290,7 @@ void stopByCounting(int targetCount) {
         onJunction = false;
       }
 
-      if (onRight) {
-        // drifted left -> steer RIGHT (slow the right wheels)
-        driveFront(LINE_SPEED_L, TURN_SLOW_SPEED);
-      } else if (onLeft) {
-        // drifted right -> steer LEFT (slow the left wheels)
-        driveFront(TURN_SLOW_SPEED, LINE_SPEED_R);
-      } else {
-        // centered OR line lost -> drive straight at base speeds
-        driveFront(LINE_SPEED_L, LINE_SPEED_R);
-      }
+      FollowLine(onLeft, onRight, LINE_SPEED_L, LINE_SPEED_R);
     }
 
     if (emergencyStopPressed()) {

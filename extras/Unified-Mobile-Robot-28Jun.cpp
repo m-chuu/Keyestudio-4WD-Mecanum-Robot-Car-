@@ -27,8 +27,8 @@ extern uint8_t speed_Lower_R;
 // Forward base speeds, per side, from the straight-line calibration.
 // The RIGHT wheels run stronger, so the right base is trimmed below the left
 // (straight-line values L=80 / R=74). Used directly as the base speeds.
-#define LINE_SPEED_L     80  // left  base (0-255)
-#define LINE_SPEED_R     74  // right base (calibrated straight-line value)
+#define LINE_SPEED_L     80  //80// left  base (0-255)
+#define LINE_SPEED_R     62  //74// right base (calibrated straight-line value)
 #define TURN_SLOW_SPEED  15  // slowed inner wheels during a correction
                              // (smaller = sharper turn; raise toward base = gentler)
 
@@ -163,7 +163,7 @@ void HomeRobot() {
     }
 
     // Diagnostic: print sensor states twice per second
-    if (millis() - lastReport > 500) {
+    if (millis() - lastReport > 100) {
       lastReport = millis();
       Serial.print(F("[HOMING] IR L/C/R = "));
       Serial.print(ON_BLACK(SENSOR_LEFT)  ? 1 : 0); Serial.print(F(" "));
@@ -209,6 +209,7 @@ void HomeRobot() {
 //   • Line lost (no sensor on black) -> keep driving straight.
 //   • '*' on the remote aborts at any time.
 // ================================================================
+
 void stopByCounting(int targetCount) {
   Serial.print(F("Counting START - follow line, stop after "));
   Serial.print(targetCount);
