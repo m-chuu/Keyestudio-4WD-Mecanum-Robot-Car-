@@ -627,36 +627,36 @@ void HomeRobot() {
     // Read all sensors once at the start of the loop
     readSensors();
 
-    // Actively steer toward the line using outer sensors
-    bool onLeft  = onLeftBlack();
-    bool onRight = onRightBlack();
-    FollowLine(onLeft, onRight, LINE_SPEED_L, LINE_SPEED_R);
+​    // Actively steer toward the line using outer sensors
+​    bool onLeft  = onLeftBlack();
+​    bool onRight = onRightBlack();
+​    FollowLine(onLeft, onRight, LINE_SPEED_L, LINE_SPEED_R);
 
-    // Check if all three sensors are on black line simultaneously
-    if (allOnBlack()) {
-      car.Stop();
-      lineFound = true;
-      Serial.println(F("-> Black Line Detected! Halting Drive Motors."));
-    }
+​    // Check if all three sensors are on black line simultaneously
+​    if (allOnBlack()) {
+​      car.Stop();
+​      lineFound = true;
+​      Serial.println(F("-> Black Line Detected! Halting Drive Motors."));
+​    }
 
-    // Diagnostic: print sensor states twice per second
-    if (millis() - lastReport > 100) {
-      lastReport = millis();
-      Serial.print(F("[HOMING] IR L/C/R = "));
-      Serial.print(onLeftBlack()  ? 1 : 0); Serial.print(F(" "));
-      Serial.print(onMidBlack()   ? 1 : 0); Serial.print(F(" "));
-      Serial.print(onRightBlack() ? 1 : 0);
-      Serial.println(F("   (motors commanded via FollowLine)"));
-    }
+​    // Diagnostic: print sensor states twice per second
+​    if (millis() - lastReport > 100) {
+​      lastReport = millis();
+​      Serial.print(F("[HOMING] IR L/C/R = "));
+​      Serial.print(onLeftBlack()  ? 1 : 0); Serial.print(F(" "));
+​      Serial.print(onMidBlack()   ? 1 : 0); Serial.print(F(" "));
+​      Serial.print(onRightBlack() ? 1 : 0);
+​      Serial.println(F("   (motors commanded via FollowLine)"));
+​    }
 
-    // Safety fallback: timeout after 30 seconds
-    if (millis() - timeoutGate > 30000) {
-      car.Stop();
-      Serial.println(F("-> Homing Error: Line seek timeout. System Halted."));
-      while (true) { delay(1000); } // Lock down system for safety
-    }
+​    // Safety fallback: timeout after 30 seconds
+​    if (millis() - timeoutGate > 30000) {
+​      car.Stop();
+​      Serial.println(F("-> Homing Error: Line seek timeout. System Halted."));
+​      while (true) { delay(1000); } // Lock down system for safety
+​    }
 
-    delay(10);
+​    delay(10);
   }
 
   // Clear IR remote command buffer to prevent accidental re-triggers
@@ -700,50 +700,50 @@ void stopByCounting(int targetCount) {
     // Read all sensors once at the start of the loop
     readSensors();
 
-    bool onLeft  = onLeftBlack();
-    bool onRight = onRightBlack();
+​    bool onLeft  = onLeftBlack();
+​    bool onRight = onRightBlack();
 
-    // --- Non-blocking debug: report sensor states every 500 ms ---
-    if (millis() - lastReport > 500) {
-      lastReport = millis();
-      Serial.print(F("[SEARCH] IR L/C/R = "));
-      Serial.print(onLeftBlack()  ? 1 : 0); Serial.print(F(" "));
-      Serial.print(onMidBlack()   ? 1 : 0); Serial.print(F(" "));
-      Serial.print(onRightBlack() ? 1 : 0);
-      Serial.print(F("   (count="));
-      Serial.print(count);
-      Serial.println(F(", motors via FollowLine)"));
-    }
+​    // --- Non-blocking debug: report sensor states every 500 ms ---
+​    if (millis() - lastReport > 500) {
+​      lastReport = millis();
+​      Serial.print(F("[SEARCH] IR L/C/R = "));
+​      Serial.print(onLeftBlack()  ? 1 : 0); Serial.print(F(" "));
+​      Serial.print(onMidBlack()   ? 1 : 0); Serial.print(F(" "));
+​      Serial.print(onRightBlack() ? 1 : 0);
+​      Serial.print(F("   (count="));
+​      Serial.print(count);
+​      Serial.println(F(", motors via FollowLine)"));
+​    }
 
-    // --- JUNCTION: all three sensors on black at once ---
-    if (allOnBlack()) {
-      if (!onJunction) {            // rising edge: a brand-new cross-line
-        count++;
-        onJunction = true;          // lock so this same line counts only once
-        Serial.print(F("  Junction crossed: "));
-        Serial.println(count);
-        if (count == targetCount) {
-          break;                    // target hit -> stop on this line
-        }
-      }
-      // Keep crossing straight so the steering logic doesn't misread the
-      // wide black band as a one-sided correction.
-      FollowLine(onLeft, onRight, LINE_SPEED_L, LINE_SPEED_R);
-    }
-    // --- NOT a junction: steer to stay on the line ---
-    else {
-      // Re-arm the counter once back on a plain vertical line (middle only).
-      if (!onLeft && !onRight) {
-        onJunction = false;
-      }
+​    // --- JUNCTION: all three sensors on black at once ---
+​    if (allOnBlack()) {
+​      if (!onJunction) {            // rising edge: a brand-new cross-line
+​        count++;
+​        onJunction = true;          // lock so this same line counts only once
+​        Serial.print(F("  Junction crossed: "));
+​        Serial.println(count);
+​        if (count == targetCount) {
+​          break;                    // target hit -> stop on this line
+​        }
+​      }
+​      // Keep crossing straight so the steering logic doesn't misread the
+​      // wide black band as a one-sided correction.
+​      FollowLine(onLeft, onRight, LINE_SPEED_L, LINE_SPEED_R);
+​    }
+​    // --- NOT a junction: steer to stay on the line ---
+​    else {
+​      // Re-arm the counter once back on a plain vertical line (middle only).
+​      if (!onLeft && !onRight) {
+​        onJunction = false;
+​      }
 
-      FollowLine(onLeft, onRight, LINE_SPEED_L, LINE_SPEED_R);
-    }
+​      FollowLine(onLeft, onRight, LINE_SPEED_L, LINE_SPEED_R);
+​    }
 
-    if (emergencyStopPressed()) {
-      Serial.println(F("  * Emergency stop pressed."));
-      break;
-    }
+​    if (emergencyStopPressed()) {
+​      Serial.println(F("  * Emergency stop pressed."));
+​      break;
+​    }
   }
 
   car.Stop();
@@ -777,13 +777,13 @@ void loop() {
     uint8_t key = IrReceiver.decodedIRData.command;
     IrReceiver.resume();
 
-    if (key == CMD_5) {
-      HomeRobot();  // drive to black-line anchor and enter ready state
-    }
-    else if (key == CMD_3) {
-      Serial.println(F("{\"status\":\"BUSY\",\"state\":\"BUSY\"}"));
-      stopByCounting(3);   // follow line, stop after 3 junctions
-    }
+​    if (key == CMD_5) {
+​      HomeRobot();  // drive to black-line anchor and enter ready state
+​    }
+​    else if (key == CMD_3) {
+​      Serial.println(F("{\"status\":\"BUSY\",\"state\":\"BUSY\"}"));
+​      stopByCounting(3);   // follow line, stop after 3 junctions
+​    }
   }
   delay(50);
 }
