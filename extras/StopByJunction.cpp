@@ -13,6 +13,21 @@ static int sensorLeftVal = 0;
 static int sensorMidVal = 0;
 static int sensorRightVal = 0;
 
+// ── Signal Stretching: latch timestamps ──────────────────────
+// Each sensor's "last black detection time" for time-window pooling
+static unsigned long lastTimeLeftBlack = 0;
+static unsigned long lastTimeMidBlack = 0;
+static unsigned long lastTimeRightBlack = 0;
+
+// Window in milliseconds: if all three sensors fired black within this
+// duration, allOnBlack() returns true (decouples from CPU cycle timing)
+#define SIGNAL_WINDOW_MS 50
+
+// Junction cooldown: minimum elapsed time before the same junction
+// can be re-counted (prevents thick lines from double-triggering)
+#define JUNCTION_COOLDOWN_MS 200
+static unsigned long lastJunctionCountTime = 0;
+
 // ── EXTERN LIBRARY VARIABLES ──────────────────────────────────
 extern uint8_t speed_Upper_L;
 extern uint8_t speed_Lower_L;
@@ -33,14 +48,14 @@ extern uint8_t speed_Lower_R;
 // The RIGHT wheels run stronger, so the right base is trimmed below the left
 // (straight-line values L=80 / R=74). Used directly as the base speeds.
 #define LINE_SPEED_L     80  //80// left  base (0-255)
-#define LINE_SPEED_R     60  //74// right base (calibrated straight-line value)
+#define LINE_SPEED_R     58  //74// right base (calibrated straight-line value)
 #define TURN_SLOW_SPEED  15  // slowed inner wheels during a correction
                              // (smaller = sharper turn; raise toward base = gentler)
 
 // Black-line detection — threshold taken from
 // PhysicVector-balckline-sensitive.cpp:
 //   white floor ~25, black tape ~750.  Strict: analog > 700 means black.
-#define BLACK_THRESHOLD 790
+#define BLACK_THRESHOLD 780
 #define ON_BLACK(pin)   (analogRead(pin) > BLACK_THRESHOLD)
 
 mecanumCar car(3, 2);
@@ -53,10 +68,16 @@ void restoreIR() {
   IrReceiver.begin(RECV_PIN, false);
 }
 
-// True only when ALL three sensors sit on black at once — i.e. the car is
-// straddling a horizontal cross-line (a junction).
+// Time-Window Latch: Returns true if ALL three sensors have detected black
+// within the last SIGNAL_WINDOW_MS milliseconds (not necessarily simultaneously).
+// This handles cases where the robot moves at an angle or speed that prevents
+// all three from reading black on the exact same CPU cycle.
 static bool allOnBlack() {
-  return (sensorLeftVal > BLACK_THRESHOLD) && (sensorMidVal > BLACK_THRESHOLD) && (sensorRightVal > BLACK_THRESHOLD);
+  unsigned long now = millis();
+  bool leftRecent = (now - lastTimeLeftBlack) <= SIGNAL_WINDOW_MS;
+  bool midRecent = (now - lastTimeMidBlack) <= SIGNAL_WINDOW_MS;
+  bool rightRecent = (now - lastTimeRightBlack) <= SIGNAL_WINDOW_MS;
+  return leftRecent && midRecent && rightRecent;
 }
 
 // Inline helpers using cached values
@@ -72,11 +93,26 @@ static inline bool onRightBlack() {
   return sensorRightVal > BLACK_THRESHOLD;
 }
 
-// Read all sensors once and cache values
+// Read all sensors once, cache values, and latch black detection timestamps.
+// When a sensor reads > BLACK_THRESHOLD, update its "last black time" for
+// the time-window pooling strategy.
 static inline void readSensors() {
+  unsigned long now = millis();
+
   sensorLeftVal = analogRead(SENSOR_LEFT);
+  if (sensorLeftVal > BLACK_THRESHOLD) {
+    lastTimeLeftBlack = now;
+  }
+
   sensorMidVal = analogRead(SENSOR_MID);
+  if (sensorMidVal > BLACK_THRESHOLD) {
+    lastTimeMidBlack = now;
+  }
+
   sensorRightVal = analogRead(SENSOR_RIGHT);
+  if (sensorRightVal > BLACK_THRESHOLD) {
+    lastTimeRightBlack = now;
+  }
 }
 
 // Returns true if the '*' emergency-stop key was pressed.
@@ -113,7 +149,6 @@ bool RunSelfAudit() {
   Serial.println(F("\n============================================="));
   Serial.println(F("         SYSTEM SELF-AUDIT IN PROGRESS        "));
   Serial.println(F("============================================="));
-  delay(500);
 
   // Audit: IR Line Tracking Sensors Input Check
   Serial.print(F("[AUDIT] Checking IR Array Pin States... "));
@@ -150,9 +185,20 @@ bool RunSelfAudit() {
   speed_Upper_L = 50; speed_Lower_L = 50;
   speed_Upper_R = 50; speed_Lower_R = 50;
   driveFront(50, 50);
-  delay(150);
+
+  // Non-blocking motor test: spin for ~150ms, then stop
+  unsigned long motorTestStart = millis();
+  while (millis() - motorTestStart < 150) {
+    // spin while polling sensors (non-blocking)
+    readSensors();
+  }
+
   car.Stop();
-  delay(100);
+  // Allow motor to settle
+  motorTestStart = millis();
+  while (millis() - motorTestStart < 100) {
+    readSensors();
+  }
   Serial.println(F("OK"));
 
   Serial.println(F("============================================="));
@@ -208,7 +254,7 @@ void HomeRobot() {
   unsigned long lastReport = 0;
 
   while (!lineFound) {
-    // Read all sensors once at the start of the loop
+    // Read all sensors once at the start of the loop (polling as fast as possible)
     readSensors();
 
     // Actively steer toward the line using outer sensors
@@ -216,15 +262,15 @@ void HomeRobot() {
     bool onRight = onRightBlack();
     FollowLine(onLeft, onRight, 60, 60);
 
-    // Check if all three sensors are on black line simultaneously
+    // Check if all three sensors have fired black within the time window
     if (allOnBlack()) {
       car.Stop();
       lineFound = true;
       Serial.println(F("-> Black Line Detected! Halting Drive Motors."));
     }
 
-    // Diagnostic: print sensor states twice per second
-    if (millis() - lastReport > 100) {
+    // Non-blocking diagnostic: print sensor states every 100ms
+    if (millis() - lastReport >= 100) {
       lastReport = millis();
       Serial.print(F("[HOMING] IR L/C/R = "));
       Serial.print(onLeftBlack()  ? 1 : 0); Serial.print(F(" "));
@@ -237,17 +283,21 @@ void HomeRobot() {
     if (millis() - timeoutGate > 30000) {
       car.Stop();
       Serial.println(F("-> Homing Error: Line seek timeout. System Halted."));
-      while (true) { delay(1000); } // Lock down system for safety
+      while (true) {
+        readSensors();  // Keep polling even in error state
+      }
     }
-
-    delay(10);
   }
 
   // Clear IR remote command buffer to prevent accidental re-triggers
   Serial.print(F("Purging IR remote receiver buffers... "));
+  unsigned long bufferPurgeStart = millis();
   while (IrReceiver.decode()) {
     IrReceiver.resume();
-    delay(50);
+    // Non-blocking purge: timeout after 500ms in case buffer is stuck
+    if (millis() - bufferPurgeStart > 500) {
+      break;
+    }
   }
   Serial.println(F("Done."));
 
@@ -260,12 +310,14 @@ void HomeRobot() {
 //  FOLLOW LINE, STOP AFTER N JUNCTIONS  (bang-bang steering + counting)
 //
 //  Crawls forward using bang-bang steering (via FollowLine) while watching
-//  for horizontal cross-lines. Each time all three sensors hit black at once
-//  (allOnBlack) a new junction is counted; the car stops when target is reached.
+//  for horizontal cross-lines detected via time-window latch (allOnBlack).
+//  Each new junction is counted; the car stops when target is reached.
 //
 //   • onJunction starts TRUE so the line under the car at launch isn't counted.
-//   • It re-arms (onJunction = false) only after the car is back on a plain
-//     vertical line (middle sensor only), so one wide cross-line counts once.
+//   • It re-arms (onJunction = false) only after the car exits the junction
+//     region (back on plain vertical line: middle sensor only).
+//   • Junction cooldown: once a junction is counted, a JUNCTION_COOLDOWN_MS
+//     gate prevents re-counting the same thick line.
 //   • Line lost (no sensor on black) -> FollowLine() keeps driving straight.
 //   • '*' on the remote aborts at any time.
 // ================================================================
@@ -279,16 +331,17 @@ void stopByCounting(int targetCount) {
   bool onJunction = true;    // true while straddling a cross-line (starts true
                              // so the launch line isn't counted)
   unsigned long lastReport = 0;   // non-blocking serial-debug timer
+  lastJunctionCountTime = millis(); // initialize cooldown gate
 
   while (count < targetCount) {
-    // Read all sensors once at the start of the loop
+    // Read all sensors once at the start of the loop (polling as fast as possible)
     readSensors();
 
     bool onLeft  = onLeftBlack();
     bool onRight = onRightBlack();
 
     // --- Non-blocking debug: report sensor states every 500 ms ---
-    if (millis() - lastReport > 500) {
+    if (millis() - lastReport >= 500) {
       lastReport = millis();
       Serial.print(F("[SEARCH] IR L/C/R = "));
       Serial.print(onLeftBlack()  ? 1 : 0); Serial.print(F(" "));
@@ -299,15 +352,20 @@ void stopByCounting(int targetCount) {
       Serial.println(F(", motors via FollowLine)"));
     }
 
-    // --- JUNCTION: all three sensors on black at once ---
+    // --- JUNCTION DETECTION: all three sensors on black (time-windowed) ---
     if (allOnBlack()) {
-      if (!onJunction) {            // rising edge: a brand-new cross-line
+      // Check cooldown gate to prevent the same thick line from being counted twice
+      unsigned long timeSinceLastJunction = millis() - lastJunctionCountTime;
+
+      if (!onJunction && timeSinceLastJunction >= JUNCTION_COOLDOWN_MS) {
+        // Rising edge: a brand-new cross-line, cooldown expired
         count++;
-        onJunction = true;          // lock so this same line counts only once
+        onJunction = true;                // lock so this same line counts only once
+        lastJunctionCountTime = millis(); // reset cooldown timer
         Serial.print(F("  Junction crossed: "));
         Serial.println(count);
         if (count == targetCount) {
-          break;                    // target hit -> stop on this line
+          break;                          // target hit -> stop on this line
         }
       }
       // Keep crossing straight so the steering logic doesn't misread the
@@ -366,8 +424,8 @@ void loop() {
     }
     else if (key == CMD_3) {
       Serial.println(F("{\"status\":\"BUSY\",\"state\":\"BUSY\"}"));
-      stopByCounting(3);   // follow line, stop after 3 junctions
+      stopByCounting(4);   // follow line, stop after 3 junctions
     }
   }
-  delay(50);
+  // No blocking delay — return immediately so loop runs as fast as possible
 }
