@@ -6,6 +6,7 @@
     - Button 1: Move 5 blocks forward starting at 60.
     - Button 2: Rotate Right at 60, then move 2 blocks starting at 40.
     - Button 3: Rotate Left at 60, then move 3 right-markers starting at 40.
+    - Button 4: Move 6 blocks forward, turn 180°, and go 7 blocks.
   ================================================================
 */
 
@@ -29,6 +30,7 @@ extern uint8_t speed_Lower_R;
 #define CMD_1           0x16
 #define CMD_2           0x19
 #define CMD_3           0x0D
+#define CMD_4           0x0C
 #define CMD_STAR        0x42 // Emergency Stop
 
 // ── Speeds & Timing ───────────────────────────────────────────
@@ -124,7 +126,27 @@ bool rotateLeft90() {
   }
 
   car.Stop();
-  delay(200); 
+  delay(200);
+  return true;
+}
+
+// ================================================================
+//  TURN 180 DEGREES RIGHT (Two 90-Degree Turns)
+// ================================================================
+bool rotateRight180() {
+  Serial.println(F("\n--- Rotating 180 Degrees Right ---"));
+
+  if (!rotateRight90()) {
+    Serial.println(F("180-degree turn aborted: first 90-degree turn failed."));
+    return false;
+  }
+
+  if (!rotateRight90()) {
+    Serial.println(F("180-degree turn aborted: second 90-degree turn failed."));
+    return false;
+  }
+
+  Serial.println(F("180-degree turn completed successfully."));
   return true;
 }
 
@@ -316,6 +338,7 @@ void setup() {
   Serial.println(F("Press '1' to go 5 blocks forward."));
   Serial.println(F("Press '2' to turn right and go 2 blocks."));
   Serial.println(F("Press '3' to turn left and go 3 right-markers."));
+  Serial.println(F("Press '4' to go 6 blocks forward, turn 180°, and go 7 blocks."));
 }
 
 void loop() {
@@ -331,14 +354,22 @@ void loop() {
   if (cmd == CMD_1) {
     moveForwardBlocks(5, SPEED_START_FAST); // Starts straight out at 60
   } else if (cmd == CMD_2) {
-    if (rotateRight90()) { 
+    if (rotateRight90()) {
       moveForwardBlocks(2, SPEED_START_SLOW); // Rotates at 60, but drives forward at 40!
     }
   } else if (cmd == CMD_3) {
-    if (rotateLeft90()) { 
+    if (rotateLeft90()) {
       moveRightSideMarkers(2, SPEED_START_SLOW); // Rotates at 60, but drives forward at 40!
-    } 
-  }
+    }
+  } else if (cmd == CMD_4) {
+    // 1) Drive straight for 6 lines (same as Button 1, but 6 instead of 5), then stop.
+    moveForwardBlocks(6, SPEED_START_FAST);
+    // 2) Turn 180 degrees right as TWO back-to-back 90-degree turns.
+    if (rotateRight90() && rotateRight90()) {
+      // 3) Drive straight again for 7 lines.
+      moveForwardBlocks(7, SPEED_START_FAST);
+    }
+  } 
 
   IrReceiver.resume();
 }
