@@ -6,22 +6,29 @@
     - Button 1: Move 5 blocks forward starting at 60.
     - Button 2: Rotate Right at 60, then move 2 blocks starting at 40.
     - Button 3: Rotate Left at 60, then move 3 right-markers starting at 40.
-    - Button 4: Move 6 blocks forward, turn 180°, and go 7 blocks.
-    - Button 5: Move 4 blocks forward, turn left, move 2 blocks, turn right, move 2 blocks, turn right, move 7 blocks.
-    - Button 6: Move 4 blocks forward, turn right, move 2 blocks, turn left, move 2 blocks, turn left, move 7 blocks.
-    
+    - Button 4: Move 6 blocks forward, turn 180°, go 7 blocks, Creep and Catch.
+    - Button 5: Move 4 blocks forward, Rotate Left, Rotate Right, Move 2 blocks forward, Creep and Catch.
+    - Button 6: Move 4 blocks forward, Rotate Right, Rotate Left, Move 2 blocks forward, Creep and Catch.
+    - Button 7: Rotate right, go 2 blocks, rotate right, go 8 blocks, then backup.
+    - Button 8: Rotate left, follow 2 right-markers, rotate left, follow 8 right-markers, then backup.
   ================================================================
 */
 
 #include <Arduino.h>
 #include <MecanumCar_v2.h>
 #include <IRremote.hpp>
+#include <Servo.h>
 
 // ── Hardware pins ─────────────────────────────────────────────
 #define RECV_PIN        A3
 #define SENSOR_LEFT     A0
 #define SENSOR_MID      A1
 #define SENSOR_RIGHT    A2
+
+// ── SERVO & ULTRASONIC PINS ───────────────────────────────────
+const uint8_t SERVO_PIN           = 9;
+const uint8_t ULTRASONIC_TRIG_PIN = 12;
+const uint8_t ULTRASONIC_ECHO_PIN = 13;
 
 // ── EXTERN LIBRARY VARIABLES ──────────────────────────────────
 extern uint8_t speed_Upper_L;
@@ -36,6 +43,8 @@ extern uint8_t speed_Lower_R;
 #define CMD_4           0x0C
 #define CMD_5           0x18
 #define CMD_6           0x5E
+#define CMD_7           0x08 
+#define CMD_8           0x1C 
 #define CMD_STAR        0x42 // Emergency Stop
 
 // ── Speeds & Timing ───────────────────────────────────────────
@@ -45,6 +54,21 @@ extern uint8_t speed_Lower_R;
 #define SPEED_MIN         35   // Safety floor so speed never hits 0
 #define CENTER_OFFSET_MS  110    // ms to drive forward after final junction
 #define TURN_BLIND_MS     150  // Blind turn duration to clear the starting line
+#define BACKWARD_OFFSET_MS 3000 // ms to move backward after catching object (TESTING: increased from 220)
+
+// ── SERVO ANGLES ──────────────────────────────────────────────
+const int SERVO_OPEN_ANGLE   = 15;
+const int SERVO_CLOSED_ANGLE = 85;
+
+// ── OBJECT DETECTION ──────────────────────────────────────────
+const uint16_t OBJECT_DETECT_DISTANCE_CM = 4;
+const unsigned long ULTRASONIC_CHECK_INTERVAL_MS = 50;
+
+// ── SERVO & ULTRASONIC GLOBALS ────────────────────────────────
+Servo servoClamp;
+uint16_t currentDistanceCm = 0;
+unsigned long lastUltrasonicCheckTime = 0;
+unsigned long lastPrintTime = 0;
 
 // ── Turn Configuration ────────────────────────────────────────
 #define STOP_SENSOR_RIGHT_TURN  SENSOR_RIGHT
@@ -65,6 +89,122 @@ void setMotorSpeed(uint8_t spd) {
 void restoreIR() {
   car.Stop();
   IrReceiver.begin(RECV_PIN, false);
+}
+
+// ================================================================
+//  SERVO & ULTRASONIC FUNCTIONS
+// ================================================================
+uint16_t readDistanceCmFast() {
+  digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(ULTRASONIC_TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+  unsigned long echoUs = pulseIn(ULTRASONIC_ECHO_PIN, HIGH, 25000UL);
+  if (echoUs == 0) return 0;
+  return echoUs / 58;
+}
+
+void servoOpen() {
+  servoClamp.write(SERVO_OPEN_ANGLE);
+  delay(500);
+  Serial.println(F("[SERVO] OPEN (15°)"));
+}
+
+void servoClosed() {
+  servoClamp.write(SERVO_CLOSED_ANGLE);
+  delay(500);
+  Serial.println(F("[SERVO] CLOSED (85°) - OBJECT CAUGHT!"));
+}
+
+bool checkUltrasonicNonBlocking() {
+  unsigned long now = millis();
+  if (now - lastUltrasonicCheckTime < ULTRASONIC_CHECK_INTERVAL_MS) return false;
+  lastUltrasonicCheckTime = now;
+  currentDistanceCm = readDistanceCmFast();
+  if (currentDistanceCm > 0 && currentDistanceCm <= OBJECT_DETECT_DISTANCE_CM) return true;
+  return false;
+}
+
+// ================================================================
+//  CREEP & CATCH (Continuous ultrasonic monitoring with real-time output)
+// ================================================================
+bool creepAndCatch() {
+  Serial.println(F("\n╔════════════════════════════════════════════════════╗"));
+  Serial.println(F("║     CREEPING FORWARD TO CATCH OBJECT (4cm)        ║"));
+  Serial.println(F("╚════════════════════════════════════════════════════╝"));
+
+  setMotorSpeed(SPEED_MIN);
+  unsigned long lastPrintTime = 0;
+
+  while (true) {
+    // Check for E-STOP
+    if (IrReceiver.decode() && IrReceiver.decodedIRData.command == CMD_STAR) {
+      Serial.println(F("E-STOP during creep!"));
+      car.Stop();
+      restoreIR();
+      return false;
+    }
+
+    // Move forward continuously
+    car.Advance();
+
+    // Read ultrasonic EVERY LOOP (no blocking checks)
+    currentDistanceCm = readDistanceCmFast();
+
+    // Print distance every 100ms for debugging
+    unsigned long now = millis();
+    if (now - lastPrintTime >= 100) {
+      lastPrintTime = now;
+      Serial.print(F("[DISTANCE] "));
+      Serial.print(currentDistanceCm);
+      Serial.println(F(" cm"));
+    }
+
+    // Detect object at 4cm or closer
+    if (currentDistanceCm > 0 && currentDistanceCm <= OBJECT_DETECT_DISTANCE_CM) {
+      Serial.println(F(""));
+      Serial.println(F("╔════════════════════════════════════════════════════╗"));
+      Serial.println(F("║       ⚠ OBJECT DETECTED AT 4 CM OR CLOSER ⚠     ║"));
+      Serial.println(F("║         Stopping robot and closing servo...       ║"));
+      Serial.println(F("╚════════════════════════════════════════════════════╝"));
+      car.Stop();
+      delay(100);
+      servoClosed();
+      delay(200);
+      return true;
+    }
+  }
+}
+
+// ================================================================
+//  BACKWARD MOVEMENT (Clears object after servo opens)
+// ================================================================
+void moveBackwardTimed(uint8_t speed) {
+  servoOpen();
+
+  Serial.print(F("\n--- Moving Backward (Speed "));
+  Serial.print(speed);
+  Serial.println(F(") ---"));
+
+  setMotorSpeed(speed);
+  unsigned long t_start = millis();
+  while (millis() - t_start < BACKWARD_OFFSET_MS) {
+    car.Back();
+
+    if (IrReceiver.decode()) {
+      if (IrReceiver.decodedIRData.command == CMD_STAR) {
+        Serial.println(F("E-STOP during backward!"));
+        break;
+      }
+      IrReceiver.resume();
+    }
+  }
+
+  car.Stop();
+  Serial.println(F("--- Movement Completed. ---"));
+
+  restoreIR();
 }
 
 // ================================================================
@@ -336,6 +476,12 @@ void setup() {
   pinMode(SENSOR_MID,   INPUT);
   pinMode(SENSOR_RIGHT, INPUT);
 
+  pinMode(ULTRASONIC_TRIG_PIN, OUTPUT);
+  pinMode(ULTRASONIC_ECHO_PIN, INPUT);
+
+  servoClamp.attach(SERVO_PIN);
+  servoOpen();
+
   car.Init();
   IrReceiver.begin(RECV_PIN, false);
 
@@ -344,8 +490,10 @@ void setup() {
   Serial.println(F("Press '2' to turn right and go 2 blocks."));
   Serial.println(F("Press '3' to turn left and go 3 right-markers."));
   Serial.println(F("Press '4' to go 6 blocks forward, turn 180°, and go 7 blocks."));
-  Serial.println(F("Press '5' for Button 5 sequence."));
-  Serial.println(F("Press '6' for Button 6 sequence."));
+  Serial.println(F("Press '5' to move 4 blocks forward, Rotate Right, Rotate Left, Move 2 blocks forward, Creep and Catch."));
+  Serial.println(F("Press '6' to move 4 blocks forward, Rotate Left, Rotate Right, Move 2 blocks forward, Creep and Catch."));
+  Serial.println(F("Press '7' to rotate right, go 2 blocks, rotate right, go 8 blocks, then backup."));
+  Serial.println(F("Press '8' to rotate left, follow 2 right-markers, rotate left, follow 8 right-markers, then backup."));
 }
 
 void loop() {
@@ -354,7 +502,7 @@ void loop() {
   uint8_t cmd = IrReceiver.decodedIRData.command;
 
   if (cmd == 0x00 || (IrReceiver.decodedIRData.flags & IRDATA_FLAGS_IS_REPEAT)) {
-    IrReceiver.resume(); 
+    IrReceiver.resume();
     return;
   }
 
@@ -369,26 +517,32 @@ void loop() {
       moveRightSideMarkers(2, SPEED_START_SLOW); // Rotates at 60, but drives forward at 40!
     }
   } else if (cmd == CMD_4) {
-    // 1) Drive straight for 6 lines (same as Button 1, but 6 instead of 5), then stop.
+    // 1) Ensure servo is open
+    servoOpen();
+    // 2) Move forward 6 blocks
     moveForwardBlocks(6, SPEED_START_FAST);
-    // 2) Turn 180 degrees right as TWO back-to-back 90-degree turns.
-    if (rotateRight90() && rotateRight90()) {
-      // 3) Drive straight again for 7 lines.
-      moveForwardBlocks(7, SPEED_START_FAST);
+    // 3) Creep forward and catch object (with ultrasonic detection)
+    if (creepAndCatch()) {
+      // 4) Turn 180 degrees right
+      if (rotateRight90() && rotateRight90()) {
+        // 5) Move forward 7 blocks
+        moveForwardBlocks(7, SPEED_START_FAST);
+        // 6) Move backward to clear object
+        moveBackwardTimed(SPEED_MIN);
+      }
     }
   } else if (cmd == CMD_5) {
+    // 1) Ensure servo is open before starting the run
+    servoOpen(); 
     moveForwardBlocks(4, SPEED_START_FAST);
     if (rotateLeft90()) {
       moveRightSideMarkers(2, SPEED_START_SLOW);
       if (rotateRight90()) {
         moveForwardBlocks(2, SPEED_START_SLOW);
         delay(1000); // 1 second pause
-        if (rotateRight90()) {
-          moveForwardBlocks(2, SPEED_START_SLOW);
-          if (rotateRight90()) {
-            moveForwardBlocks(7, SPEED_START_SLOW);
-          }
-        }
+        
+        // 2) Creep forward and catch object
+        creepAndCatch();
       }
     }
   } else if (cmd == CMD_6) {
@@ -398,15 +552,27 @@ void loop() {
       if (rotateLeft90()) {
         moveRightSideMarkers(2, SPEED_START_SLOW);
         delay(1000); // 1 second pause
-        if (rotateLeft90()) {
-          moveRightSideMarkers(2, SPEED_START_SLOW);
-          if (rotateLeft90()) {
-            moveRightSideMarkers(7, SPEED_START_SLOW);
-          }
-        }
+        
+        // 2) Creep forward and catch object
+        creepAndCatch();
+      }
+    }
+  } else if (cmd == CMD_7) {
+    if (rotateRight90()) {
+      moveForwardBlocks(2, SPEED_START_SLOW);
+      if (rotateRight90()) {
+        moveForwardBlocks(7, SPEED_START_SLOW);
+        moveBackwardTimed(SPEED_MIN);
+      }
+    }
+  } else if (cmd == CMD_8) {
+    if (rotateLeft90()) {
+      moveRightSideMarkers(2, SPEED_START_SLOW);
+      if (rotateLeft90()) {
+        moveRightSideMarkers(7, SPEED_START_SLOW);
+        moveBackwardTimed(SPEED_MIN);
       }
     }
   }
-
   IrReceiver.resume();
 }

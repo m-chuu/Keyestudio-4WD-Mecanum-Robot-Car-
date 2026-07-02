@@ -6,9 +6,11 @@
     - Button 1: Move 5 blocks forward starting at 60.
     - Button 2: Rotate Right at 60, then move 2 blocks starting at 40.
     - Button 3: Rotate Left at 60, then move 3 right-markers starting at 40.
-    - Button 4: Move 6 blocks forward, turn 180°, and go 7 blocks.
+    - Button 4: Move 6 blocks forward, turn 180°, go 7 blocks, Creep and Catch.
     - Button 5: Move 4 blocks forward, Rotate Left, Rotate Right, Move 2 blocks forward, Creep and Catch.
     - Button 6: Move 4 blocks forward, Rotate Right, Rotate Left, Move 2 blocks forward, Creep and Catch.
+    - Button 7: Rotate right, go 2 blocks, rotate right, go 8 blocks, then backup.
+    - Button 8: Rotate left, follow 2 right-markers, rotate left, follow 8 right-markers, then backup.
   ================================================================
 */
 
@@ -40,7 +42,9 @@ extern uint8_t speed_Lower_R;
 #define CMD_3           0x0D
 #define CMD_4           0x0C
 #define CMD_5           0x18
-#define CMD_6           0x5E 
+#define CMD_6           0x5E
+#define CMD_7           0x08 
+#define CMD_8           0x1C 
 #define CMD_STAR        0x42 // Emergency Stop
 
 // ── Speeds & Timing ───────────────────────────────────────────
@@ -486,8 +490,10 @@ void setup() {
   Serial.println(F("Press '2' to turn right and go 2 blocks."));
   Serial.println(F("Press '3' to turn left and go 3 right-markers."));
   Serial.println(F("Press '4' to go 6 blocks forward, turn 180°, and go 7 blocks."));
-  Serial.println(F("Press '5' to go 6 blocks, creep & catch, turn 180°, and go 7 blocks."));
-  Serial.println(F("Press '6' to test moveBackwardTimed(SPEED_MIN) - QUICK CALIBRATION MODE"));
+  Serial.println(F("Press '5' to move 4 blocks forward, Rotate Right, Rotate Left, Move 2 blocks forward, Creep and Catch."));
+  Serial.println(F("Press '6' to move 4 blocks forward, Rotate Left, Rotate Right, Move 2 blocks forward, Creep and Catch."));
+  Serial.println(F("Press '7' to rotate right, go 2 blocks, rotate right, go 8 blocks, then backup."));
+  Serial.println(F("Press '8' to rotate left, follow 2 right-markers, rotate left, follow 8 right-markers, then backup."));
 }
 
 void loop() {
@@ -551,7 +557,22 @@ void loop() {
         creepAndCatch();
       }
     }
+  } else if (cmd == CMD_7) {
+    if (rotateRight90()) {
+      moveForwardBlocks(2, SPEED_START_SLOW);
+      if (rotateRight90()) {
+        moveForwardBlocks(7, SPEED_START_SLOW);
+        moveBackwardTimed(SPEED_MIN);
+      }
+    }
+  } else if (cmd == CMD_8) {
+    if (rotateLeft90()) {
+      moveRightSideMarkers(2, SPEED_START_SLOW);
+      if (rotateLeft90()) {
+        moveRightSideMarkers(7, SPEED_START_SLOW);
+        moveBackwardTimed(SPEED_MIN);
+      }
+    }
   }
-
   IrReceiver.resume();
 }
