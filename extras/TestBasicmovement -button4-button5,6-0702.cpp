@@ -509,14 +509,6 @@ void loop() {
       moveRightSideMarkers(2, SPEED_START_SLOW); // Rotates at 60, but drives forward at 40!
     }
   } else if (cmd == CMD_4) {
-    // 1) Drive straight for 6 lines (same as Button 1, but 6 instead of 5), then stop.
-    moveForwardBlocks(6, SPEED_START_FAST);
-    // 2) Turn 180 degrees right as TWO back-to-back 90-degree turns.
-    if (rotateRight90() && rotateRight90()) {
-      // 3) Drive straight again for 7 lines.
-      moveForwardBlocks(7, SPEED_START_FAST);
-    }
-  } else if (cmd == CMD_5) {
     // 1) Ensure servo is open
     servoOpen();
     // 2) Move forward 6 blocks
@@ -531,6 +523,25 @@ void loop() {
         moveBackwardTimed(SPEED_MIN);
       }
     }
+  } else if (cmd == CMD_5) {
+    moveForwardBlocks(4, SPEED_START_FAST);
+    if (rotateLeft90()) {
+      moveRightSideMarkers(2, SPEED_START_SLOW);
+      if (rotateRight90()) {
+        moveForwardBlocks(2, SPEED_START_SLOW);
+        delay(1000); // 1 second pause
+      }
+    }
+  } else if (cmd == CMD_6) {
+    moveForwardBlocks(4, SPEED_START_FAST);
+    if (rotateRight90()) {
+      moveForwardBlocks(2, SPEED_START_SLOW);
+      if (rotateLeft90()) {
+        moveRightSideMarkers(2, SPEED_START_SLOW);
+        delay(1000); // 1 second pause
+      }
+    }
+  }
 
   IrReceiver.resume();
 }
