@@ -531,11 +531,6 @@ void loop() {
         moveBackwardTimed(SPEED_MIN);
       }
     }
-  } else if (cmd == CMD_6) {
-    // TEMPORARY: Quick backward testing (press Button 6 to test moveBackwardTimed without running full sequence)
-    Serial.println(F("\n[QUICK TEST] Button 6 pressed - testing moveBackwardTimed(SPEED_MIN)"));
-    moveBackwardTimed(SPEED_MIN);
-  }
 
   IrReceiver.resume();
 }
