@@ -7,6 +7,8 @@
     - Button 2: Rotate Right at 60, then move 2 blocks starting at 40.
     - Button 3: Rotate Left at 60, then move 3 right-markers starting at 40.
     - Button 4: Move 6 blocks forward, turn 180°, and go 7 blocks.
+    - Button 5: Move 4 blocks forward, Rotate Left, Rotate Right, Move 2 blocks forward, Creep and Catch.
+    - Button 6: Move 4 blocks forward, Rotate Right, Rotate Left, Move 2 blocks forward, Creep and Catch.
   ================================================================
 */
 
@@ -38,7 +40,7 @@ extern uint8_t speed_Lower_R;
 #define CMD_3           0x0D
 #define CMD_4           0x0C
 #define CMD_5           0x18
-#define CMD_6           0x5E // Button 6 (TEMPORARY: for fast backward timing calibration)
+#define CMD_6           0x5E 
 #define CMD_STAR        0x42 // Emergency Stop
 
 // ── Speeds & Timing ───────────────────────────────────────────
@@ -524,12 +526,17 @@ void loop() {
       }
     }
   } else if (cmd == CMD_5) {
+    // 1) Ensure servo is open before starting the run
+    servoOpen(); 
     moveForwardBlocks(4, SPEED_START_FAST);
     if (rotateLeft90()) {
       moveRightSideMarkers(2, SPEED_START_SLOW);
       if (rotateRight90()) {
         moveForwardBlocks(2, SPEED_START_SLOW);
         delay(1000); // 1 second pause
+        
+        // 2) Creep forward and catch object
+        creepAndCatch();
       }
     }
   } else if (cmd == CMD_6) {
@@ -539,6 +546,9 @@ void loop() {
       if (rotateLeft90()) {
         moveRightSideMarkers(2, SPEED_START_SLOW);
         delay(1000); // 1 second pause
+        
+        // 2) Creep forward and catch object
+        creepAndCatch();
       }
     }
   }
