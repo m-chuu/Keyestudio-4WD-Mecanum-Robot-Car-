@@ -59,9 +59,9 @@ extern uint8_t speed_Lower_R;
 #define CMD_STAR        0x42 // Emergency Stop
 
 // ── Speeds & Timing ───────────────────────────────────────────
-#define SPEED_START_FAST  55   // Normal forward start speed (Button 1)
+#define SPEED_START_FAST  60   // Normal forward start speed (Button 1)
 #define SPEED_START_SLOW  40   // Forward speed used after rotating (Button 2 & 3)
-#define SPEED_ROTATE      50   // Maintained strong speed for 90-degree rotations
+#define SPEED_ROTATE      60   // Maintained strong speed for 90-degree rotations
 #define SPEED_MIN         35   // Safety floor so speed never hits 0
 #define CENTER_OFFSET_MS  110    // ms to drive forward after final junction
 #define TURN_BLIND_MS     150  // Blind turn duration to clear the starting line
