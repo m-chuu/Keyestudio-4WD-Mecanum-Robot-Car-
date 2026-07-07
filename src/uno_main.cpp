@@ -561,7 +561,7 @@ void loop() {
         // 6) Move backward to clear object
         moveBackwardTimed(SPEED_MIN);
         // 7) Task complete — report status to Favoriot via ESP32
-        sendStatusToFavoriot("task4_complete");
+        sendStatusToFavoriot("TaskMiddle_complete");
       }
     }
   } else if (cmd == CMD_5) {
@@ -596,6 +596,7 @@ void loop() {
       if (rotateRight90()) {
         moveForwardBlocks(7, SPEED_START_SLOW);
         moveBackwardTimed(SPEED_MIN);
+        sendStatusToFavoriot("TaskLeft_complete");
       }
     }
   } else if (cmd == CMD_8) {
@@ -604,6 +605,7 @@ void loop() {
       if (rotateLeft90()) {
         moveRightSideMarkers(7, SPEED_START_SLOW);
         moveBackwardTimed(SPEED_MIN);
+        sendStatusToFavoriot("TaskRight_complete");
       }
     }
   }
