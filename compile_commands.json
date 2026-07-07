@@ -150,13 +150,61 @@
         "output": ".pio/build/uno/FrameworkArduino/wiring_shift.c.o"
     },
     {
+        "command": "/Users/user/.platformio/packages/toolchain-atmelavr/bin/avr-g++ -o .pio/build/uno/lib2db/MecanumCar_v2/MecanumCar_v2.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilib/MecanumCar_v2 -I/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino -I/Users/user/.platformio/packages/framework-arduino-avr/variants/standard lib/MecanumCar_v2/MecanumCar_v2.cpp",
+        "directory": "/Users/user/Documents/PlatformIO-Robotics/Projects/Mobile-Robot-Final-Program",
+        "file": "lib/MecanumCar_v2/MecanumCar_v2.cpp",
+        "output": ".pio/build/uno/lib2db/MecanumCar_v2/MecanumCar_v2.cpp.o"
+    },
+    {
+        "command": "/Users/user/.platformio/packages/toolchain-atmelavr/bin/avr-g++ -o .pio/build/uno/libde5/Servo/avr/Servo.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilib/Servo/src -I/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino -I/Users/user/.platformio/packages/framework-arduino-avr/variants/standard lib/Servo/src/avr/Servo.cpp",
+        "directory": "/Users/user/Documents/PlatformIO-Robotics/Projects/Mobile-Robot-Final-Program",
+        "file": "lib/Servo/src/avr/Servo.cpp",
+        "output": ".pio/build/uno/libde5/Servo/avr/Servo.cpp.o"
+    },
+    {
+        "command": "/Users/user/.platformio/packages/toolchain-atmelavr/bin/avr-g++ -o .pio/build/uno/libde5/Servo/mbed/Servo.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilib/Servo/src -I/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino -I/Users/user/.platformio/packages/framework-arduino-avr/variants/standard lib/Servo/src/mbed/Servo.cpp",
+        "directory": "/Users/user/Documents/PlatformIO-Robotics/Projects/Mobile-Robot-Final-Program",
+        "file": "lib/Servo/src/mbed/Servo.cpp",
+        "output": ".pio/build/uno/libde5/Servo/mbed/Servo.cpp.o"
+    },
+    {
+        "command": "/Users/user/.platformio/packages/toolchain-atmelavr/bin/avr-g++ -o .pio/build/uno/libde5/Servo/megaavr/Servo.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilib/Servo/src -I/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino -I/Users/user/.platformio/packages/framework-arduino-avr/variants/standard lib/Servo/src/megaavr/Servo.cpp",
+        "directory": "/Users/user/Documents/PlatformIO-Robotics/Projects/Mobile-Robot-Final-Program",
+        "file": "lib/Servo/src/megaavr/Servo.cpp",
+        "output": ".pio/build/uno/libde5/Servo/megaavr/Servo.cpp.o"
+    },
+    {
+        "command": "/Users/user/.platformio/packages/toolchain-atmelavr/bin/avr-g++ -o .pio/build/uno/libde5/Servo/nrf52/Servo.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilib/Servo/src -I/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino -I/Users/user/.platformio/packages/framework-arduino-avr/variants/standard lib/Servo/src/nrf52/Servo.cpp",
+        "directory": "/Users/user/Documents/PlatformIO-Robotics/Projects/Mobile-Robot-Final-Program",
+        "file": "lib/Servo/src/nrf52/Servo.cpp",
+        "output": ".pio/build/uno/libde5/Servo/nrf52/Servo.cpp.o"
+    },
+    {
+        "command": "/Users/user/.platformio/packages/toolchain-atmelavr/bin/avr-g++ -o .pio/build/uno/libde5/Servo/sam/Servo.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilib/Servo/src -I/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino -I/Users/user/.platformio/packages/framework-arduino-avr/variants/standard lib/Servo/src/sam/Servo.cpp",
+        "directory": "/Users/user/Documents/PlatformIO-Robotics/Projects/Mobile-Robot-Final-Program",
+        "file": "lib/Servo/src/sam/Servo.cpp",
+        "output": ".pio/build/uno/libde5/Servo/sam/Servo.cpp.o"
+    },
+    {
+        "command": "/Users/user/.platformio/packages/toolchain-atmelavr/bin/avr-g++ -o .pio/build/uno/libde5/Servo/samd/Servo.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilib/Servo/src -I/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino -I/Users/user/.platformio/packages/framework-arduino-avr/variants/standard lib/Servo/src/samd/Servo.cpp",
+        "directory": "/Users/user/Documents/PlatformIO-Robotics/Projects/Mobile-Robot-Final-Program",
+        "file": "lib/Servo/src/samd/Servo.cpp",
+        "output": ".pio/build/uno/libde5/Servo/samd/Servo.cpp.o"
+    },
+    {
+        "command": "/Users/user/.platformio/packages/toolchain-atmelavr/bin/avr-g++ -o .pio/build/uno/libde5/Servo/stm32f4/Servo.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilib/Servo/src -I/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino -I/Users/user/.platformio/packages/framework-arduino-avr/variants/standard lib/Servo/src/stm32f4/Servo.cpp",
+        "directory": "/Users/user/Documents/PlatformIO-Robotics/Projects/Mobile-Robot-Final-Program",
+        "file": "lib/Servo/src/stm32f4/Servo.cpp",
+        "output": ".pio/build/uno/libde5/Servo/stm32f4/Servo.cpp.o"
+    },
+    {
         "command": "/Users/user/.platformio/packages/toolchain-atmelavr/bin/avr-g++ -o .pio/build/uno/libb82/SoftwareSerial/SoftwareSerial.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -I/Users/user/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src -I/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino -I/Users/user/.platformio/packages/framework-arduino-avr/variants/standard /Users/user/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src/SoftwareSerial.cpp",
         "directory": "/Users/user/Documents/PlatformIO-Robotics/Projects/Mobile-Robot-Final-Program",
         "file": "/Users/user/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src/SoftwareSerial.cpp",
         "output": ".pio/build/uno/libb82/SoftwareSerial/SoftwareSerial.cpp.o"
     },
     {
-        "command": "/Users/user/.platformio/packages/toolchain-atmelavr/bin/avr-g++ -o .pio/build/uno/src/uno_main.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Iinclude -Isrc -I/Users/user/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src -I.pio/libdeps/uno/IRremote/src -I/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino -I/Users/user/.platformio/packages/framework-arduino-avr/variants/standard src/uno_main.cpp",
+        "command": "/Users/user/.platformio/packages/toolchain-atmelavr/bin/avr-g++ -o .pio/build/uno/src/uno_main.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Iinclude -Isrc -I/Users/user/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src -Ilib/Servo/src -Ilib/MecanumCar_v2 -I.pio/libdeps/uno/IRremote/src -I/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino -I/Users/user/.platformio/packages/framework-arduino-avr/variants/standard src/uno_main.cpp",
         "directory": "/Users/user/Documents/PlatformIO-Robotics/Projects/Mobile-Robot-Final-Program",
         "file": "src/uno_main.cpp",
         "output": ".pio/build/uno/src/uno_main.cpp.o"
