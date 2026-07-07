@@ -59,9 +59,9 @@ extern uint8_t speed_Lower_R;
 #define CMD_STAR        0x42 // Emergency Stop
 
 // ── Speeds & Timing ───────────────────────────────────────────
-#define SPEED_START_FAST  60   // Normal forward start speed (Button 1)
+#define SPEED_START_FAST  55   // Normal forward start speed (Button 1)
 #define SPEED_START_SLOW  40   // Forward speed used after rotating (Button 2 & 3)
-#define SPEED_ROTATE      60   // Maintained strong speed for 90-degree rotations
+#define SPEED_ROTATE      50   // Maintained strong speed for 90-degree rotations
 #define SPEED_MIN         35   // Safety floor so speed never hits 0
 #define CENTER_OFFSET_MS  110    // ms to drive forward after final junction
 #define TURN_BLIND_MS     150  // Blind turn duration to clear the starting line
@@ -236,14 +236,16 @@ void moveBackwardTimed(uint8_t speed) {
 //  TURN 90 DEGREES RIGHT (Maintains Speed 60)
 // ================================================================
 bool rotateRight90() {
-  Serial.println(F("\n--- Rotating 90 Degrees Right (Speed 60) ---"));
+  Serial.print(F("\n--- Rotating 90 Degrees Right (Speed "));
+  Serial.print(SPEED_ROTATE);
+  Serial.println(F(") ---"));
 
   unsigned long t_start = millis();
   while (millis() - t_start < TURN_BLIND_MS) {
     if (IrReceiver.decode() && IrReceiver.decodedIRData.command == CMD_STAR) {
        Serial.println(F("E-STOP!")); restoreIR(); return false;
     }
-    setMotorSpeed(SPEED_ROTATE); // Maintained at 60
+    setMotorSpeed(SPEED_ROTATE); 
     car.Turn_Right();
   }
 
@@ -270,14 +272,16 @@ bool rotateRight90() {
 //  TURN 90 DEGREES LEFT (Maintains Speed 60)
 // ================================================================
 bool rotateLeft90() {
-  Serial.println(F("\n--- Rotating 90 Degrees Left (Speed 60) ---"));
+  Serial.print(F("\n--- Rotating 90 Degrees Left (Speed "));
+  Serial.print(SPEED_ROTATE);
+  Serial.println(F(") ---"));
 
   unsigned long t_start = millis();
   while (millis() - t_start < TURN_BLIND_MS) {
     if (IrReceiver.decode() && IrReceiver.decodedIRData.command == CMD_STAR) {
        Serial.println(F("E-STOP!")); restoreIR(); return false;
     }
-    setMotorSpeed(SPEED_ROTATE); // Maintained at 60
+    setMotorSpeed(SPEED_ROTATE); 
     car.Turn_Left();
   }
 
