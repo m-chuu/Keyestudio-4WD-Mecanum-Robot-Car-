@@ -65,6 +65,7 @@ extern uint8_t speed_Lower_R;
 #define TURN_BLIND_MS     150 //180 //200
 #define QUICK_REVERSE_MS  250  // <-- TIME IN MILLISECONDS TO REVERSE BEFORE TURNING
 #define MOVE_FWD_TIMEOUT_MS 10000  // Max time for MOVE_FORWARD_TIMED before giving up
+#define DRIFT_LEFT_TIMEOUT_MS 3000 // Max time for DRIFT_LEFT_TIMED before giving up
 #define OBJECT_SLOW_DISTANCE_CM  10
 #define OBJECT_STOP_DISTANCE_CM   4
 #define OBJECT_APPROACH_SPEED    28
@@ -88,6 +89,7 @@ enum ActionType {
   ROTATE_RIGHT,
   ROTATE_180,
   DRIFT_LEFT,
+  DRIFT_LEFT_TIMED,
   DETECT_GRAB,
   DETECT_BLUE_GRAB,
   DETECT_RED_GRAB,
@@ -868,7 +870,7 @@ bool rotateLeft90() {
 // ================================================================
 //  DRIFT LEFT UNTIL LINE (Rear wheels only, pivots on front axle)
 // ================================================================
-bool driftLeftToLine(uint8_t speed) {
+bool driftLeftToLine(uint8_t speed, unsigned long timeoutMs = 0) {
   Serial.println(F("\n--- Drifting Left Until Line ---"));
 
   unsigned long t_start = millis();
@@ -880,6 +882,12 @@ bool driftLeftToLine(uint8_t speed) {
 
   while (true) {
     if (checkEStop()) return false;
+
+    if (timeoutMs > 0 && millis() - t_start >= timeoutMs) {
+      Serial.println(F("Drift left timeout! Proceeding to next step."));
+      break;
+    }
+
     setMotorSpeed(speed);
     car.drift_left();
 
@@ -1126,6 +1134,9 @@ void executeSequence(const Step sequence[], int totalSteps) {
       case DRIFT_LEFT:
         stepSuccess = driftLeftToLine(step.param2);
         break;
+      case DRIFT_LEFT_TIMED:
+        stepSuccess = driftLeftToLine(step.param2, DRIFT_LEFT_TIMEOUT_MS);
+        break;
       case DETECT_GRAB:
         stepSuccess = DetectAndGrab(step.param1, step.param2);
         break;
@@ -1186,7 +1197,7 @@ void runBlueSuccessPath1() {
     {ROTATE_RIGHT, 0, 0},
     {DELAY_MS, 500, 0},
 
-    {DRIFT_LEFT, 0, SPEED_MIN},
+    {DRIFT_LEFT_TIMED, 0, SPEED_MIN},
     {DELAY_MS, 1000, 0},
 
     {MOVE_FORWARD_TIMED, 7, SPEED_START_SLOW},
