@@ -128,6 +128,15 @@ void restoreIR() {
   IrReceiver.begin(RECV_PIN, false);
 }
 
+void sendStatusToFavoriot(const char* status) {
+  espSerial.print('"');
+  espSerial.print(status);
+  espSerial.println('"');
+
+  Serial.print(F("[FAVORIOT] Status sent to ESP32: "));
+  Serial.println(status);
+}
+
 long readUltrasonicDistance() {
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(5);
@@ -1188,7 +1197,7 @@ void executeSequence(const Step sequence[], int totalSteps) {
 }
 
 void runBlueSuccessPath1() {
-  static const Step successPath1[] PROGMEM = {
+  static const Step successPath1Deliver[] PROGMEM = {
     {DELAY_MS, 500, 0},
 
     {ROTATE_RIGHT, 0, 0},
@@ -1208,7 +1217,9 @@ void runBlueSuccessPath1() {
 
     {REVERSE_TIME, 500, 35},
     {DELAY_MS, 500, 0},
+  };
 
+  static const Step successPath1Return[] PROGMEM = {
     {ROTATE_RIGHT, 0, 0},
     {DELAY_MS, 500, 0},
 
@@ -1220,13 +1231,20 @@ void runBlueSuccessPath1() {
   };
 
   executeSequence(
-    successPath1,
-    sizeof(successPath1) / sizeof(successPath1[0])
+    successPath1Deliver,
+    sizeof(successPath1Deliver) / sizeof(successPath1Deliver[0])
+  );
+
+  sendStatusToFavoriot("task4_complete");
+
+  executeSequence(
+    successPath1Return,
+    sizeof(successPath1Return) / sizeof(successPath1Return[0])
   );
 }
 
 void runBlueSuccessPath2() {
-  static const Step successPath2[] PROGMEM = {
+  static const Step successPath2Deliver[] PROGMEM = {
     {DELAY_MS, 500, 0},
 
     {ROTATE_RIGHT, 0, 0},
@@ -1246,7 +1264,9 @@ void runBlueSuccessPath2() {
 
     {REVERSE_TIME, 500, 35},
     {DELAY_MS, 500, 0},
+  };
 
+  static const Step successPath2Return[] PROGMEM = {
     {ROTATE_RIGHT, 0, 0},
     {DELAY_MS, 500, 0},
 
@@ -1258,13 +1278,20 @@ void runBlueSuccessPath2() {
   };
 
   executeSequence(
-    successPath2,
-    sizeof(successPath2) / sizeof(successPath2[0])
+    successPath2Deliver,
+    sizeof(successPath2Deliver) / sizeof(successPath2Deliver[0])
+  );
+
+  sendStatusToFavoriot("task4_complete");
+
+  executeSequence(
+    successPath2Return,
+    sizeof(successPath2Return) / sizeof(successPath2Return[0])
   );
 }
 
 void runBlueSuccessPath3() {
-  static const Step successPath3[] PROGMEM = {
+  static const Step successPath3Deliver[] PROGMEM = {
     {DELAY_MS, 500, 0},
 
     {ROTATE_LEFT, 0, 0},
@@ -1283,7 +1310,9 @@ void runBlueSuccessPath3() {
     {DELAY_MS, 300, 0},
     {REVERSE_TIME, 500, 35},
     {DELAY_MS, 500, 0},
+  };
 
+  static const Step successPath3Return[] PROGMEM = {
     {ROTATE_RIGHT, 0, 0},
     {DELAY_MS, 500, 0},
 
@@ -1295,8 +1324,15 @@ void runBlueSuccessPath3() {
   };
 
   executeSequence(
-    successPath3,
-    sizeof(successPath3) / sizeof(successPath3[0])
+    successPath3Deliver,
+    sizeof(successPath3Deliver) / sizeof(successPath3Deliver[0])
+  );
+
+  sendStatusToFavoriot("task4_complete");
+
+  executeSequence(
+    successPath3Return,
+    sizeof(successPath3Return) / sizeof(successPath3Return[0])
   );
 }
 
