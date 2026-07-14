@@ -324,7 +324,7 @@ bool DetectBlueAndGrab(int targetBlocks, uint8_t startSpeed)
           delay(300);
 
           closeGripper();
-          delay(1500);
+          delay(4500);
 
           restoreIR();
           return true;
@@ -1045,7 +1045,7 @@ void executeSequence(const Step sequence[], int totalSteps) {
 
 void runBlueSuccessPath1() {
   static const Step successPath1[] PROGMEM = {
-    {DELAY_MS, 500, 0},
+    {DELAY_MS, 4500, 0},
 
     {ROTATE_RIGHT, 0, 0},
     {DELAY_MS, 500, 0},
@@ -1057,7 +1057,7 @@ void runBlueSuccessPath1() {
     {DELAY_MS, 500, 0},
 
     {OPEN_GRIPPER, 0, 0},
-    {DELAY_MS, 300, 0},
+    {DELAY_MS, 1000, 0},
 
     {REVERSE_TIME, 500, 35},
     {DELAY_MS, 500, 0},

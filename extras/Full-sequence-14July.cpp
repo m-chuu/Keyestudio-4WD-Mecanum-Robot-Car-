@@ -324,7 +324,7 @@ bool DetectBlueAndGrab(int targetBlocks, uint8_t startSpeed)
           delay(300);
 
           closeGripper();
-          delay(1500);
+          delay(500);
 
           restoreIR();
           return true;
@@ -967,24 +967,20 @@ bool moveBackwardBlocks(int targetBlocks, uint8_t speed) {
 // ================================================================
 //  SEQUENCE EXECUTION MOTOR
 // ================================================================
-void executeSequence(const Step sequence[], int totalSteps) {
+void executeSequence(Step sequence[], int totalSteps) {
   for (int i = 0; i < totalSteps; i++) {
     bool stepSuccess = true;
-
-    // Sequence tables live in flash (PROGMEM); copy one step into RAM
-    Step step;
-    memcpy_P(&step, &sequence[i], sizeof(Step));
-
-    switch (step.action) {
+    
+    switch (sequence[i].action) {
       case MOVE_FORWARD:
       case MOVE_LEFT_MARKERS:
       case MOVE_RIGHT_MARKERS:
-        stepSuccess = moveLineTracking(step.action, step.param1, step.param2);
+        stepSuccess = moveLineTracking(sequence[i].action, sequence[i].param1, sequence[i].param2);
         break;
         case MOVE_BACKWARD:
         stepSuccess = moveBackwardBlocks(
-          step.param1,
-          step.param2
+          sequence[i].param1,
+          sequence[i].param2
         );
         break;
       case ROTATE_LEFT:
@@ -994,45 +990,45 @@ void executeSequence(const Step sequence[], int totalSteps) {
         stepSuccess = rotate90(false);
         break;
       case DETECT_GRAB:
-        stepSuccess = DetectAndGrab(step.param1, step.param2);
+        stepSuccess = DetectAndGrab(sequence[i].param1, sequence[i].param2);
         break;
         case DETECT_BLUE_GRAB:
         stepSuccess = DetectBlueAndGrab(
-            step.param1,
-            step.param2
+            sequence[i].param1,
+            sequence[i].param2
         );
         break;
       case DETECT_RED_GRAB:
         stepSuccess = DetectRedAndGrab(
-            step.param1,
-            step.param2
+            sequence[i].param1,
+            sequence[i].param2
         );
         break;
       case DETECT_YELLOW_GRAB:
         stepSuccess = DetectYellowAndGrab(
-            step.param1,
-            step.param2
+            sequence[i].param1,
+            sequence[i].param2
         );
         break;
       case OPEN_GRIPPER:
         openGripper();
         break;
       case DELAY_MS:
-        delay(step.param1);
+        delay(sequence[i].param1);
         break;
       case QUICK_REVERSE:
-        setMotorSpeed(step.param2); // Uses assigned speed parameter
+        setMotorSpeed(sequence[i].param2); // Uses assigned speed parameter
         car.Back();
-        delay(step.param1);         // Backs up for assigned duration parameter
+        delay(sequence[i].param1);         // Backs up for assigned duration parameter
         car.Stop();
         break;
         case REVERSE_TIME:
         stepSuccess = reverseForTime(
-        step.param1,   // milliseconds
-        step.param2    // speed
+        sequence[i].param1,   // milliseconds
+        sequence[i].param2    // speed
     );
     break;
-
+        
     }
     
     if (!stepSuccess) {
@@ -1044,9 +1040,7 @@ void executeSequence(const Step sequence[], int totalSteps) {
 }
 
 void runBlueSuccessPath1() {
-  static const Step successPath1[] PROGMEM = {
-    {DELAY_MS, 500, 0},
-
+  Step successPath1[] = {
     {ROTATE_RIGHT, 0, 0},
     {DELAY_MS, 500, 0},
 
@@ -1079,7 +1073,7 @@ void runBlueSuccessPath1() {
 }
 
 void runBlueSuccessPath2() {
-  static const Step successPath2[] PROGMEM = {
+  Step successPath2[] = {
     {DELAY_MS, 500, 0},
 
     {ROTATE_RIGHT, 0, 0},
@@ -1117,7 +1111,7 @@ void runBlueSuccessPath2() {
 }
 
 void runBlueSuccessPath3() {
-  static const Step successPath3[] PROGMEM = {
+  Step successPath3[] = {
     {DELAY_MS, 500, 0},
 
     {ROTATE_LEFT, 0, 0},
@@ -1155,7 +1149,7 @@ void runBlueSuccessPath3() {
 
 // Go for Left Side
 void goFromMiddleToLeftSide() {
-  static const Step goToLeftSide[] PROGMEM = {
+  Step goToLeftSide[] = {
     {REVERSE_TIME, 1500, 35},
     {DELAY_MS, 500, 0},
 
@@ -1176,7 +1170,7 @@ void goFromMiddleToLeftSide() {
 }
 
 void goFromLeftToRightSide() {
-  static const Step goToRightSide[] PROGMEM = {
+  Step goToRightSide[] = {
     {REVERSE_TIME, 1500, 35},
     {DELAY_MS, 500, 0},
 
@@ -1198,7 +1192,7 @@ void goFromLeftToRightSide() {
 
 bool runCmd2MiddlePath()
 {
-    static const Step middlePath[] PROGMEM = {
+    Step middlePath[] = {
         {DETECT_GRAB, 6, SPEED_START_SLOW},
         {DELAY_MS, 500, 0},
 
@@ -1237,7 +1231,7 @@ bool runCmd2MiddlePath()
 
 bool runCmd2LeftPath()
 {
-    static const Step leftPath[] PROGMEM = {
+    Step leftPath[] = {
         {MOVE_FORWARD, 3, SPEED_START_SLOW},
         {DELAY_MS, 500, 0},
 
@@ -1291,7 +1285,7 @@ bool runCmd2LeftPath()
 
 bool runCmd2RightPath()
 {
-    static const Step rightPath[] PROGMEM = {
+    Step rightPath[] = {
         {MOVE_FORWARD, 2, SPEED_START_SLOW},
         {DELAY_MS, 500, 0},
 
@@ -1364,7 +1358,7 @@ void runRemote4Mission()
   // ============================================================
   // POSITION 1: MIDDLE
   // ============================================================
-  static const Step approachMiddle[] PROGMEM = {
+  Step approachMiddle[] = {
     {MOVE_FORWARD, 3, SPEED_START_SLOW},
     {DELAY_MS, 500, 0}
   };
@@ -1426,7 +1420,7 @@ void runRemote4Mission()
   restoreIR();
 }
 void runRedSuccessPath1() {
-  static const Step successPath1[] PROGMEM = {
+  Step successPath1[] = {
     {ROTATE_RIGHT, 0, 0},
     {DELAY_MS, 500, 0},
 
@@ -1459,7 +1453,7 @@ void runRedSuccessPath1() {
 }
 
 void runRedSuccessPath2() {
-  static const Step successPath2[] PROGMEM = {
+  Step successPath2[] = {
     {DELAY_MS, 500, 0},
 
     {ROTATE_RIGHT, 0, 0},
@@ -1497,7 +1491,7 @@ void runRedSuccessPath2() {
 }
 
 void runRedSuccessPath3() {
-  static const Step successPath3[] PROGMEM = {
+  Step successPath3[] = {
     {DELAY_MS, 500, 0},
 
     {ROTATE_LEFT, 0, 0},
@@ -1536,7 +1530,7 @@ void runRedSuccessPath3() {
 
 // Go for Left Side
 void goFromMiddleToLeftSideRed() {
-  static const Step goToLeftSide[] PROGMEM = {
+  Step goToLeftSide[] = {
     {REVERSE_TIME, 1500, 35},
     {DELAY_MS, 500, 0},
 
@@ -1557,7 +1551,7 @@ void goFromMiddleToLeftSideRed() {
 }
 
 void goFromLeftToRightSideRed() {
-  static const Step goToRightSide[] PROGMEM = {
+  Step goToRightSide[] = {
     {REVERSE_TIME, 1500, 35},
     {DELAY_MS, 500, 0},
 
@@ -1584,7 +1578,7 @@ void runRemote5Mission()
   // ============================================================
   // POSITION 1: MIDDLE
   // ============================================================
-  static const Step approachMiddle[] PROGMEM = {
+  Step approachMiddle[] = {
     {MOVE_FORWARD, 3, SPEED_START_SLOW},
     {DELAY_MS, 500, 0}
   };
@@ -1653,7 +1647,7 @@ void runRemote6Mission()
   // ============================================================
   // POSITION 1: MIDDLE
   // ============================================================
-  static const Step approachMiddle[] PROGMEM = {
+  Step approachMiddle[] = {
     {MOVE_FORWARD, 3, SPEED_START_SLOW},
     {DELAY_MS, 500, 0}
   };
@@ -1813,7 +1807,7 @@ void loop()
     {
         case CMD_1:
         {
-            static const Step path1[] PROGMEM = {
+            Step path1[] = {
                 {MOVE_FORWARD, 3, SPEED_START_SLOW},
                 {DELAY_MS, 500, 0},
                 {ROTATE_LEFT, 0, 0},
@@ -1849,7 +1843,7 @@ void loop()
 
         case CMD_3:
         {
-            static const Step path3[] PROGMEM = {
+            Step path3[] = {
                 {MOVE_FORWARD, 2, SPEED_START_SLOW},
                 {DELAY_MS, 500, 0},
                 {ROTATE_RIGHT, 0, 0},
@@ -1882,13 +1876,13 @@ void loop()
             runRemote4Mission();
             break;
 
-        // case CMD_5:
-        //     runRemote5Mission();
-        //     break;
+        case CMD_5:
+            runRemote5Mission();
+            break;
 
-        // case CMD_6:
-        //     runRemote6Mission();
-        //     break;
+        case CMD_6:
+            runRemote6Mission();
+            break;
 
         case CMD_STAR:
             Serial.println(F("!! EMERGENCY STOP !!"));
