@@ -22,8 +22,13 @@
 #define GRIPPER_PIN     9
 
 #define GRIPPER_OPEN_ANGLE   30
-#define GRIPPER_CLOSE_ANGLE  100
+#define GRIPPER_CLOSE_ANGLE  90
 #define GRAB_DISTANCE_CM     3
+
+// Time to let the servo physically reach the open angle before
+// cutting power (limp mode). write() returns instantly; the servo
+// needs real time to travel 100° -> 30° or it goes limp mid-move.
+#define LIMP_SETTLE_MS       300
 
 Servo gripperServo;
 bool gripperIsOpen = false;
@@ -53,8 +58,8 @@ extern uint8_t speed_Lower_R;
 
 // ── Speeds, Timing & Tuning ───────────────────────────────────
 #define SPEED_START_FAST  60   
-#define SPEED_START_SLOW  35   //38
-#define SPEED_ROTATE      50   //48
+#define SPEED_START_SLOW  40   //38
+#define SPEED_ROTATE      52   //48
 #define SPEED_MIN         35   
 #define CENTER_OFFSET_MS  110  
 #define TURN_BLIND_MS     180 //200  
@@ -133,6 +138,11 @@ void openGripper() {
   gripperServo.write(GRIPPER_OPEN_ANGLE);
   gripperIsOpen = true;
   delay(100);
+
+  // Safe to go limp here — nothing is being gripped, no load to hold.
+  // Both gripper functions re-attach on demand before the next move.
+  delay(LIMP_SETTLE_MS);
+  gripperServo.detach();
 }
 
 void closeGripper() {
@@ -140,6 +150,8 @@ void closeGripper() {
   gripperServo.write(GRIPPER_CLOSE_ANGLE);
   gripperIsOpen = false;
   delay(100);
+  // Intentionally NOT detaching here — the object is being carried,
+  // the servo must stay powered to hold the grip under load.
 }
 
 bool checkEStop()
@@ -324,7 +336,7 @@ bool DetectBlueAndGrab(int targetBlocks, uint8_t startSpeed)
           delay(300);
 
           closeGripper();
-          delay(4500);
+          delay(500);
 
           restoreIR();
           return true;
@@ -1045,15 +1057,15 @@ void executeSequence(const Step sequence[], int totalSteps) {
 
 void runBlueSuccessPath1() {
   static const Step successPath1[] PROGMEM = {
-    {DELAY_MS, 4500, 0},
-
-    {ROTATE_RIGHT, 0, 0},
     {DELAY_MS, 500, 0},
 
     {ROTATE_RIGHT, 0, 0},
     {DELAY_MS, 500, 0},
 
-    {MOVE_FORWARD, 6, SPEED_START_SLOW},
+    {ROTATE_RIGHT, 0, 0},
+    {DELAY_MS, 500, 0},
+
+    {MOVE_FORWARD, 7, SPEED_START_SLOW},
     {DELAY_MS, 500, 0},
 
     {OPEN_GRIPPER, 0, 0},
@@ -1364,18 +1376,18 @@ void runRemote4Mission()
   // ============================================================
   // POSITION 1: MIDDLE
   // ============================================================
-  static const Step approachMiddle[] PROGMEM = {
-    {MOVE_FORWARD, 3, SPEED_START_SLOW},
-    {DELAY_MS, 500, 0}
-  };
+  // static const Step approachMiddle[] PROGMEM = {
+  //   {MOVE_FORWARD, 3, SPEED_START_SLOW},
+  //   {DELAY_MS, 500, 0}
+  // };
 
-  executeSequence(
-    approachMiddle,
-    sizeof(approachMiddle) / sizeof(approachMiddle[0])
-  );
+  // executeSequence(
+  //   approachMiddle,
+  //   sizeof(approachMiddle) / sizeof(approachMiddle[0])
+  // );
 
   bool firstBlueGrabbed = DetectBlueAndGrab(
-    3,
+    6,
     SPEED_START_SLOW
   );
 

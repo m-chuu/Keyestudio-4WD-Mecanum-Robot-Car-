@@ -22,8 +22,13 @@
 #define GRIPPER_PIN     9
 
 #define GRIPPER_OPEN_ANGLE   30
-#define GRIPPER_CLOSE_ANGLE  100
+#define GRIPPER_CLOSE_ANGLE  90
 #define GRAB_DISTANCE_CM     3
+
+// Time to let the servo physically reach the open angle before
+// cutting power (limp mode). write() returns instantly; the servo
+// needs real time to travel 100° -> 30° or it goes limp mid-move.
+#define LIMP_SETTLE_MS       300
 
 Servo gripperServo;
 bool gripperIsOpen = false;
@@ -53,13 +58,14 @@ extern uint8_t speed_Lower_R;
 
 // ── Speeds, Timing & Tuning ───────────────────────────────────
 #define SPEED_START_FAST  60   
-#define SPEED_START_SLOW  35   //38
-#define SPEED_ROTATE      50   //48
+#define SPEED_START_SLOW  40   //38
+#define SPEED_ROTATE      60   //52 //48
 #define SPEED_MIN         35   
 #define CENTER_OFFSET_MS  110  
-#define TURN_BLIND_MS     180 //200  
+#define TURN_BLIND_MS     150 //180 //200
 #define QUICK_REVERSE_MS  250  // <-- TIME IN MILLISECONDS TO REVERSE BEFORE TURNING
-#define OBJECT_SLOW_DISTANCE_CM  12
+#define MOVE_FWD_TIMEOUT_MS 10000  // Max time for MOVE_FORWARD_TIMED before giving up
+#define OBJECT_SLOW_DISTANCE_CM  10
 #define OBJECT_STOP_DISTANCE_CM   4
 #define OBJECT_APPROACH_SPEED    28
 
@@ -74,11 +80,14 @@ volatile bool cloudEmergencyStop = false;
 // ── SEQUENCE ENGINE DEFINITIONS ───────────────────────────────
 enum ActionType {
   MOVE_FORWARD,
+  MOVE_FORWARD_TIMED,
   MOVE_BACKWARD,
   MOVE_LEFT_MARKERS,
   MOVE_RIGHT_MARKERS,
   ROTATE_LEFT,
   ROTATE_RIGHT,
+  ROTATE_180,
+  DRIFT_LEFT,
   DETECT_GRAB,
   DETECT_BLUE_GRAB,
   DETECT_RED_GRAB,
@@ -132,14 +141,21 @@ void openGripper() {
   if (!gripperServo.attached()) gripperServo.attach(GRIPPER_PIN);
   gripperServo.write(GRIPPER_OPEN_ANGLE);
   gripperIsOpen = true;
-  delay(500);
+  delay(100);
+
+  // Safe to go limp here — nothing is being gripped, no load to hold.
+  // Both gripper functions re-attach on demand before the next move.
+  delay(LIMP_SETTLE_MS);
+  gripperServo.detach();
 }
 
 void closeGripper() {
   if (!gripperServo.attached()) gripperServo.attach(GRIPPER_PIN);
   gripperServo.write(GRIPPER_CLOSE_ANGLE);
   gripperIsOpen = false;
-  delay(700);
+  delay(100);
+  // Intentionally NOT detaching here — the object is being carried,
+  // the servo must stay powered to hold the grip under load.
 }
 
 bool checkEStop()
@@ -240,7 +256,9 @@ String detectColorName()
     return "UNKNOWN";
 }
 bool moveBackwardBlocks(int targetBlocks, uint8_t speed);
-bool rotate90(bool turnLeft);
+bool rotateLeft90();
+bool rotateRight90();
+bool rotateRight180();
 
 bool reverseForTime(unsigned long durationMs, uint8_t speed)
 {
@@ -324,7 +342,7 @@ bool DetectBlueAndGrab(int targetBlocks, uint8_t startSpeed)
           delay(300);
 
           closeGripper();
-          delay(1500);
+          delay(500);
 
           restoreIR();
           return true;
@@ -789,32 +807,127 @@ bool DetectAndGrab(int targetBlocks, uint8_t startSpeed) {
   return true;
 }
 
-bool rotate90(bool turnLeft) {
+// ================================================================
+//  TURN 90 DEGREES RIGHT (Maintains SPEED_ROTATE)
+// ================================================================
+bool rotateRight90() {
+  Serial.println(F("\n--- Rotating 90 Degrees Right ---"));
+
   unsigned long t_start = millis();
-  uint8_t sensor = turnLeft ? STOP_SENSOR_LEFT_TURN : STOP_SENSOR_RIGHT_TURN;
-  
   while (millis() - t_start < TURN_BLIND_MS) {
     if (checkEStop()) return false;
     setMotorSpeed(SPEED_ROTATE);
-    turnLeft ? car.Turn_Left() : car.Turn_Right();
+    car.Turn_Right();
   }
+
   while (true) {
     if (checkEStop()) return false;
     setMotorSpeed(SPEED_ROTATE);
-    turnLeft ? car.Turn_Left() : car.Turn_Right();
-    if (digitalRead(sensor) == HIGH) break;
+    car.Turn_Right();
+
+    if (digitalRead(STOP_SENSOR_RIGHT_TURN) == HIGH) {
+      Serial.println(F("Line found! Stopping turn."));
+      break;
+    }
   }
+
   car.Stop();
   delay(200);
   return true;
 }
 
-bool moveLineTracking(ActionType type, int targetBlocks, uint8_t startSpeed) {
+// ================================================================
+//  TURN 90 DEGREES LEFT (Maintains SPEED_ROTATE)
+// ================================================================
+bool rotateLeft90() {
+  Serial.println(F("\n--- Rotating 90 Degrees Left ---"));
+
+  unsigned long t_start = millis();
+  while (millis() - t_start < TURN_BLIND_MS) {
+    if (checkEStop()) return false;
+    setMotorSpeed(SPEED_ROTATE);
+    car.Turn_Left();
+  }
+
+  while (true) {
+    if (checkEStop()) return false;
+    setMotorSpeed(SPEED_ROTATE);
+    car.Turn_Left();
+
+    if (digitalRead(STOP_SENSOR_LEFT_TURN) == HIGH) {
+      Serial.println(F("Line found! Stopping turn."));
+      break;
+    }
+  }
+
+  car.Stop();
+  delay(200);
+  return true;
+}
+
+// ================================================================
+//  DRIFT LEFT UNTIL LINE (Rear wheels only, pivots on front axle)
+// ================================================================
+bool driftLeftToLine(uint8_t speed) {
+  Serial.println(F("\n--- Drifting Left Until Line ---"));
+
+  unsigned long t_start = millis();
+  while (millis() - t_start < TURN_BLIND_MS) {
+    if (checkEStop()) return false;
+    setMotorSpeed(speed);
+    car.drift_left();
+  }
+
+  while (true) {
+    if (checkEStop()) return false;
+    setMotorSpeed(speed);
+    car.drift_left();
+
+    if (digitalRead(STOP_SENSOR_LEFT_TURN) == HIGH) {
+      Serial.println(F("Line found! Stopping drift."));
+      break;
+    }
+  }
+
+  car.Stop();
+  delay(200);
+  return true;
+}
+
+// ================================================================
+//  TURN 180 DEGREES RIGHT (Two 90-Degree Turns)
+// ================================================================
+bool rotateRight180() {
+  Serial.println(F("\n--- Rotating 180 Degrees Right ---"));
+
+  if (!rotateRight90()) {
+    Serial.println(F("180-degree turn aborted: first 90-degree turn failed."));
+    return false;
+  }
+
+  if (!rotateRight90()) {
+    Serial.println(F("180-degree turn aborted: second 90-degree turn failed."));
+    return false;
+  }
+
+  Serial.println(F("180-degree turn completed successfully."));
+  return true;
+}
+
+bool moveLineTracking(ActionType type, int targetBlocks, uint8_t startSpeed, unsigned long timeoutMs = 0) {
   int count = 0;
   bool onMark = true;
+  unsigned long t_start = millis();
 
   while (count < targetBlocks) {
     if (checkEStop()) return false;
+
+    if (timeoutMs > 0 && millis() - t_start >= timeoutMs) {
+      Serial.println(F("Line tracking timeout! Proceeding to next step."));
+      car.Stop();
+      restoreIR();
+      return true;
+    }
 
     uint8_t L = digitalRead(SENSOR_LEFT);
     uint8_t M = digitalRead(SENSOR_MID);
@@ -834,6 +947,12 @@ bool moveLineTracking(ActionType type, int targetBlocks, uint8_t startSpeed) {
       if (!onMark) {
         count++;
         onMark = true;
+
+        Serial.print(F("Marker: "));
+        Serial.print(count);
+        Serial.print(F(" / "));
+        Serial.println(targetBlocks);
+
         if (count == targetBlocks) break;
       }
       setMotorSpeed(currentSpeed); car.Advance();
@@ -981,6 +1100,14 @@ void executeSequence(const Step sequence[], int totalSteps) {
       case MOVE_RIGHT_MARKERS:
         stepSuccess = moveLineTracking(step.action, step.param1, step.param2);
         break;
+      case MOVE_FORWARD_TIMED:
+        stepSuccess = moveLineTracking(
+          MOVE_FORWARD,
+          step.param1,
+          step.param2,
+          MOVE_FWD_TIMEOUT_MS
+        );
+        break;
         case MOVE_BACKWARD:
         stepSuccess = moveBackwardBlocks(
           step.param1,
@@ -988,10 +1115,16 @@ void executeSequence(const Step sequence[], int totalSteps) {
         );
         break;
       case ROTATE_LEFT:
-        stepSuccess = rotate90(true);
+        stepSuccess = rotateLeft90();
         break;
       case ROTATE_RIGHT:
-        stepSuccess = rotate90(false);
+        stepSuccess = rotateRight90();
+        break;
+      case ROTATE_180:
+        stepSuccess = rotateRight180();
+        break;
+      case DRIFT_LEFT:
+        stepSuccess = driftLeftToLine(step.param2);
         break;
       case DETECT_GRAB:
         stepSuccess = DetectAndGrab(step.param1, step.param2);
@@ -1053,11 +1186,14 @@ void runBlueSuccessPath1() {
     {ROTATE_RIGHT, 0, 0},
     {DELAY_MS, 500, 0},
 
-    {MOVE_FORWARD, 6, SPEED_START_SLOW},
+    {DRIFT_LEFT, 0, SPEED_MIN},
+    {DELAY_MS, 1000, 0},
+
+    {MOVE_FORWARD_TIMED, 7, SPEED_START_SLOW},
     {DELAY_MS, 500, 0},
 
     {OPEN_GRIPPER, 0, 0},
-    {DELAY_MS, 300, 0},
+    {DELAY_MS, 1000, 0},
 
     {REVERSE_TIME, 500, 35},
     {DELAY_MS, 500, 0},
@@ -1364,18 +1500,18 @@ void runRemote4Mission()
   // ============================================================
   // POSITION 1: MIDDLE
   // ============================================================
-  static const Step approachMiddle[] PROGMEM = {
-    {MOVE_FORWARD, 3, SPEED_START_SLOW},
-    {DELAY_MS, 500, 0}
-  };
+  // static const Step approachMiddle[] PROGMEM = {
+  //   {MOVE_FORWARD, 3, SPEED_START_SLOW},
+  //   {DELAY_MS, 500, 0}
+  // };
 
-  executeSequence(
-    approachMiddle,
-    sizeof(approachMiddle) / sizeof(approachMiddle[0])
-  );
+  // executeSequence(
+  //   approachMiddle,
+  //   sizeof(approachMiddle) / sizeof(approachMiddle[0])
+  // );
 
   bool firstBlueGrabbed = DetectBlueAndGrab(
-    3,
+    7,
     SPEED_START_SLOW
   );
 
@@ -1433,10 +1569,10 @@ void runRedSuccessPath1() {
     {ROTATE_RIGHT, 0, 0},
     {DELAY_MS, 500, 0},
 
-    {MOVE_FORWARD, 6, SPEED_START_SLOW},
+    {MOVE_FORWARD, 7, SPEED_START_SLOW},
     {DELAY_MS, 500, 0},
 
-     {OPEN_GRIPPER, 0, 0},
+    {OPEN_GRIPPER, 0, 0},
     {DELAY_MS, 300, 0},
 
     {REVERSE_TIME, 500, 35},
