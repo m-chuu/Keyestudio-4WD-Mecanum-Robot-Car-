@@ -97,8 +97,8 @@ enum ActionType {
   OPEN_GRIPPER,
   DELAY_MS,
   QUICK_REVERSE,
-  REVERSE_TIME 
-  
+  REVERSE_TIME,
+  STOP_WHEELS
 };
 
 struct Step {
@@ -1186,6 +1186,10 @@ void executeSequence(const Step sequence[], int totalSteps) {
     );
     break;
 
+      case STOP_WHEELS:
+        car.Stop();
+        break;
+
     }
     
     if (!stepSuccess) {
@@ -1210,6 +1214,7 @@ void runBlueSuccessPath1() {
     {DELAY_MS, 1000, 0},
 
     {MOVE_FORWARD_TIMED, 7, SPEED_START_SLOW},
+    {STOP_WHEELS, 0, 0},
     {DELAY_MS, 500, 0},
 
     {OPEN_GRIPPER, 0, 0},
@@ -1257,6 +1262,7 @@ void runBlueSuccessPath2() {
     {DELAY_MS, 500, 0},
 
     {MOVE_FORWARD, 7, SPEED_START_SLOW},
+    {STOP_WHEELS, 0, 0},
     {DELAY_MS, 500, 0},
 
     {OPEN_GRIPPER, 0, 0},
@@ -1304,6 +1310,7 @@ void runBlueSuccessPath3() {
     {DELAY_MS, 500, 0},
 
     {MOVE_FORWARD, 7, SPEED_START_SLOW},
+    {STOP_WHEELS, 0, 0},
     {DELAY_MS, 500, 0},
 
     {OPEN_GRIPPER, 0, 0},
