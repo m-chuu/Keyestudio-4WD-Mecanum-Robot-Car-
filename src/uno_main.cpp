@@ -66,6 +66,7 @@ extern uint8_t speed_Lower_R;
 #define QUICK_REVERSE_MS  250  // <-- TIME IN MILLISECONDS TO REVERSE BEFORE TURNING
 #define MOVE_FWD_TIMEOUT_MS 7500  // Max time for MOVE_FORWARD_TIMED before giving up
 #define DRIFT_LEFT_TIMEOUT_MS 1500 // Max time for DRIFT_LEFT_TIMED before giving up
+#define ROTATE_TIMEOUT_MS 5000     // Max time for a 90-degree rotation before giving up
 #define OBJECT_SLOW_DISTANCE_CM  10
 #define OBJECT_STOP_DISTANCE_CM   4
 #define OBJECT_APPROACH_SPEED    28
@@ -833,6 +834,12 @@ bool rotateRight90() {
 
   while (true) {
     if (checkEStop()) return false;
+
+    if (millis() - t_start >= ROTATE_TIMEOUT_MS) {
+      Serial.println(F("Rotate right timeout! Proceeding to next step."));
+      break;
+    }
+
     setMotorSpeed(SPEED_ROTATE);
     car.Turn_Right();
 
