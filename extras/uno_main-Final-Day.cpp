@@ -64,7 +64,7 @@ extern uint8_t speed_Lower_R;
 #define CENTER_OFFSET_MS  110  
 #define TURN_BLIND_MS     150 //180 //200
 #define QUICK_REVERSE_MS  250  // <-- TIME IN MILLISECONDS TO REVERSE BEFORE TURNING
-#define MOVE_FWD_TIMEOUT_MS 7500  // Max time for MOVE_FORWARD_TIMED before giving up
+#define MOVE_FWD_TIMEOUT_MS 10000  // Max time for MOVE_FORWARD_TIMED before giving up
 #define DRIFT_LEFT_TIMEOUT_MS 1500 // Max time for DRIFT_LEFT_TIMED before giving up
 #define OBJECT_SLOW_DISTANCE_CM  10
 #define OBJECT_STOP_DISTANCE_CM   4
