@@ -79,10 +79,6 @@ SoftwareSerial espSerial(11, 10);
 
 volatile bool cloudEmergencyStop = false;
 
-// Set by moveLineTracking when a timed move gives up before reaching
-// its marker count; read by REVERSE_IF_TIMEOUT steps.
-bool moveTimedOut = false;
-
 // ── SEQUENCE ENGINE DEFINITIONS ───────────────────────────────
 enum ActionType {
   MOVE_FORWARD,
@@ -103,7 +99,6 @@ enum ActionType {
   DELAY_MS,
   QUICK_REVERSE,
   REVERSE_TIME,
-  REVERSE_IF_TIMEOUT,
   STOP_WHEELS
 };
 
@@ -947,14 +942,12 @@ bool moveLineTracking(ActionType type, int targetBlocks, uint8_t startSpeed, uns
   int count = 0;
   bool onMark = true;
   unsigned long t_start = millis();
-  moveTimedOut = false;
 
   while (count < targetBlocks) {
     if (checkEStop()) return false;
 
     if (timeoutMs > 0 && millis() - t_start >= timeoutMs) {
       Serial.println(F("Line tracking timeout! Proceeding to next step."));
-      moveTimedOut = true;
       car.Stop();
       restoreIR();
       return true;
@@ -1200,14 +1193,6 @@ void executeSequence(const Step sequence[], int totalSteps) {
     );
     break;
 
-      case REVERSE_IF_TIMEOUT:
-        // Runs only when the preceding timed move gave up mid-course
-        // (robot may be pressed against something); otherwise a no-op.
-        if (moveTimedOut) {
-          stepSuccess = reverseForTime(step.param1, step.param2);
-        }
-        break;
-
       case STOP_WHEELS:
         car.Stop();
         break;
@@ -1238,8 +1223,6 @@ void runBlueSuccessPath1() {
     {MOVE_FORWARD_TIMED, 7, SPEED_START_SLOW},
     {STOP_WHEELS, 0, 0},
     {DELAY_MS, 500, 0},
-
-    {REVERSE_IF_TIMEOUT, 100, 35},
 
     {OPEN_GRIPPER, 0, 0},
     {DELAY_MS, 1000, 0},
@@ -1657,8 +1640,6 @@ void runRedSuccessPath1(const char* status = "task5_complete") {
     {MOVE_FORWARD_TIMED, 7, SPEED_START_SLOW},
     {STOP_WHEELS, 0, 0},
     {DELAY_MS, 500, 0},
-
-    {REVERSE_IF_TIMEOUT, 100, 35},
 
     {OPEN_GRIPPER, 0, 0},
     {DELAY_MS, 1000, 0},
@@ -2140,13 +2121,13 @@ void loop()
             runRemote4Mission();
             break;
 
-        case CMD_5:
-            runRemote5Mission();
-            break;
+        // case CMD_5:
+        //     runRemote5Mission();
+        //     break;
 
-        case CMD_6:
-            runRemote6Mission();
-            break;
+        // case CMD_6:
+        //     runRemote6Mission();
+        //     break;
 
         case CMD_STAR:
             Serial.println(F("!! EMERGENCY STOP !!"));
