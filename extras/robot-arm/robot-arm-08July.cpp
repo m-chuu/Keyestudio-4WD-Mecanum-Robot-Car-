@@ -6,6 +6,7 @@
 #include <ArduinoJson.h>
 #include <Adafruit_PWMServoDriver.h>
 #include "HUSKYLENS.h"
+#include "../../secrets.h"  // WiFi & Favoriot credentials (gitignored)
 
 // =====================================================================
 // FAVORIOT CLOUD TRIGGER SETUP GUIDE (one-time, done once per account):
@@ -79,12 +80,9 @@ HardwareSerial HuskySerial(2); // ESP32 Serial2
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
 
 // ===================== WIFI / FAVORIOT CONFIG =====================
-const char* WIFI_SSID     = "ASEM Training";
-const char* WIFI_PASSWORD = "Class@Asem";
-
-const char* FAVORIOT_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InNpdmVzaHN1cmVuZHJhbjE4IiwicmVhZF93cml0ZSI6dHJ1ZSwiaWF0IjoxNzgzMDUyMDQ2fQ.SWIpVoFnvZxckCRVWqfzafNR7xk16zH1Skumz0p27L8";
-// This must match whatever device_developer_id the MOBILE ROBOT posts to.
-const char* MOBILE_ROBOT_DEVICE_ID = "ultrasound@siveshsurendran18";
+// WIFI_SSID2/WIFI_PASSWORD2 (training-room network), FAVORIOT_API_KEY and
+// MOBILE_ROBOT_DEVICE_ID (must match whatever device_developer_id the
+// MOBILE ROBOT posts to) all come from secrets.h at the project root.
 
 const unsigned long FAVORIOT_POLL_INTERVAL_MS = 3000; // how often to check
 unsigned long lastFavoriotPollTime = 0;
@@ -331,8 +329,8 @@ void scanAndSort() {
 // ===================== WIFI CONNECT =====================
 void connectWiFi() {
   Serial.print("WIFI: connecting to ");
-  Serial.println(WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.println(WIFI_SSID2);
+  WiFi.begin(WIFI_SSID2, WIFI_PASSWORD2);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");

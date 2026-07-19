@@ -2,12 +2,14 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <PubSubClient.h>
+#include "../secrets.h"  // WiFi & Favoriot credentials (gitignored)
 
 // ================================================================
-// WIFI
+// WIFI / FAVORIOT CREDENTIALS
+// WIFI_SSID2/WIFI_PASSWORD2 (training-room network), FAVORIOT_API_KEY,
+// DEVICE_DEVELOPER_ID, MQTT_PORT and DEVICE_ACCESS_TOKEN (device access
+// token, NOT the API key) all come from secrets.h at the project root.
 // ================================================================
-const char* WIFI_SSID = "ASEM Training";
-const char* WIFI_PASSWORD = "Class@Asem";
 
 // ================================================================
 // FAVORIOT HTTP STREAM
@@ -15,22 +17,10 @@ const char* WIFI_PASSWORD = "Class@Asem";
 const char* FAVORIOT_ENDPOINT =
     "https://apiv2.favoriot.com/v2/streams";
 
-const char* FAVORIOT_API_KEY =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InNpdmVzaHN1cmVuZHJhbjE4IiwicmVhZF93cml0ZSI6dHJ1ZSwiaWF0IjoxNzgzMDUyMDQ2fQ.SWIpVoFnvZxckCRVWqfzafNR7xk16zH1Skumz0p27L8";
-
-const char* DEVICE_DEVELOPER_ID =
-    "ultrasound@siveshsurendran18";
-
 // ================================================================
 // FAVORIOT MQTT RPC
-// Copy the DEVICE ACCESS TOKEN from Favoriot device details.
-// Do not use the normal API key here.
 // ================================================================
 const char* MQTT_HOST = "mqtt.favoriot.com";
-const uint16_t MQTT_PORT = 1883;
-
-const char* DEVICE_ACCESS_TOKEN =
-    "2SSnMe7ZxLhtq228hFJm9liYjI4aTbFS";
 
 // ================================================================
 // ESP32 <-> ARDUINO UNO UART
@@ -59,7 +49,7 @@ void connectWiFi()
     Serial.print("Connecting to WiFi");
 
     WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    WiFi.begin(WIFI_SSID2, WIFI_PASSWORD2);
 
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
